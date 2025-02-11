@@ -349,6 +349,9 @@ class ModernTiledImageViewer(ctk.CTkFrame):
         self.grid_rowconfigure(0, weight=1)
         self.grid_columnconfigure(0, weight=1)
 
+        # Add after other initializations
+        self.init_roi_variables()
+
         # Initialize variables
         self.original_image = None
         self.image_path = None
@@ -383,6 +386,205 @@ class ModernTiledImageViewer(ctk.CTkFrame):
 
         # Bind events
         self._bind_events()
+
+    def init_roi_variables(self):
+        self.roi_points = []  # Store points for current ROI being drawn
+        self.roi_polygons = {}  # Store completed ROIs for each image {image_name: [points]}
+        self.drawing_roi = False  # Flag to indicate if we're currently drawing ROI
+        self.current_roi_line = None  # Store temporary line while drawing
+        self.hover_roi = False  # Track if mouse is over ROI
+
+    def start_roi_drawing(self):
+        """Start ROI drawing mode"""
+        if not self.GUI.current_image:
+            return
+
+        self.drawing_roi = True
+        self.roi_points = []
+        self.canvas.config(cursor="cross")
+
+        # Bind ROI-specific events
+        self.canvas.bind("<Button-1>", self.add_roi_point)
+        self.canvas.bind("<Motion>", self.update_roi_preview)
+        self.canvas.bind("<Button-3>", self.delete_roi)
+        self.canvas.bind("<Double-Button-1>", self.complete_roi)
+
+    def stop_roi_drawing(self):
+        """Stop ROI drawing mode"""
+        self.drawing_roi = False
+        self.canvas.config(cursor="arrow")
+        self.roi_points = []
+        if self.current_roi_line:
+            self.canvas.delete(self.current_roi_line)
+            self.current_roi_line = None
+
+        # Restore original bindings
+        self.canvas.bind("<Button-1>", self.on_button_press)
+        self.canvas.bind("<Motion>", self.on_mouse_move)
+        self.canvas.bind("<Button-3>", self.delete_box)
+
+    def add_roi_point(self, event):
+        """Add a point to the current ROI"""
+        if not self.drawing_roi:
+            return
+
+        canvas_x = self.canvas.canvasx(event.x)
+        canvas_y = self.canvas.canvasy(event.y)
+
+        # Add point
+        self.roi_points.append((canvas_x, canvas_y))
+
+        # Draw point
+        point_radius = 3
+        self.canvas.create_oval(
+            canvas_x - point_radius, canvas_y - point_radius,
+            canvas_x + point_radius, canvas_y + point_radius,
+            fill="yellow", tags="roi_point"
+        )
+
+        # Draw line between points
+        if len(self.roi_points) > 1:
+            prev_x, prev_y = self.roi_points[-2]
+            self.canvas.create_line(
+                prev_x, prev_y, canvas_x, canvas_y,
+                fill="yellow", width=2, tags="roi_line"
+            )
+
+    def update_roi_preview(self, event):
+        """Update preview line while drawing ROI"""
+        if not self.drawing_roi or not self.roi_points:
+            return
+
+        canvas_x = self.canvas.canvasx(event.x)
+        canvas_y = self.canvas.canvasy(event.y)
+
+        # Delete previous preview line
+        if self.current_roi_line:
+            self.canvas.delete(self.current_roi_line)
+
+        # Draw new preview line from last point to current mouse position
+        last_x, last_y = self.roi_points[-1]
+        self.current_roi_line = self.canvas.create_line(
+            last_x, last_y, canvas_x, canvas_y,
+            fill="yellow", width=2, dash=(4, 4), tags="roi_preview"
+        )
+
+    def complete_roi(self, event):
+        """Complete ROI polygon on double-click"""
+        if not self.drawing_roi or len(self.roi_points) < 3:
+            return
+
+        # Close the polygon
+        first_x, first_y = self.roi_points[0]
+        last_x, last_y = self.roi_points[-1]
+        self.canvas.create_line(
+            last_x, last_y, first_x, first_y,
+            fill="yellow", width=2, tags="roi_line"
+        )
+
+        # Store ROI for current image
+        if self.GUI.current_image:
+            # Convert to image coordinates
+            image_points = [(x / self.scale, y / self.scale) for x, y in self.roi_points]
+            self.roi_polygons[self.GUI.current_image] = image_points
+
+        # Clean up
+        self.stop_roi_drawing()
+        self.draw_roi()  # Redraw with hover effects
+
+        # Reset button text and color
+        self.GUI.roi_button.configure(
+            text="Edit ROI",
+            fg_color=COLORS['secondary']
+        )
+
+        # Update statistics
+        self.GUI.update_box_statistics()
+
+    def draw_roi(self):
+        """Draw stored ROI for current image"""
+        self.canvas.delete("roi_line", "roi_point", "roi_preview")
+
+        if not self.GUI.current_image or not self.drawing_roi and \
+                self.GUI.current_image not in self.roi_polygons:
+            return
+
+        points = self.roi_polygons.get(self.GUI.current_image, [])
+        if not points:
+            return
+
+        # Scale points to current zoom level
+        scaled_points = [(x * self.scale, y * self.scale) for x, y in points]
+
+        # Draw polygon
+        fill_color = "yellow" if self.hover_roi else ""
+
+        # Draw filled polygon with stipple for semi-transparency
+        self.canvas.create_polygon(
+            *[coord for point in scaled_points for coord in point],
+            outline="yellow",
+            fill=fill_color,
+            stipple="gray50",  # Semi-transparent fill
+            width=2,
+            tags="roi_line"
+        )
+
+        # Draw points at vertices for better visibility
+        for x, y in scaled_points:
+            self.canvas.create_oval(
+                x - 3, y - 3,
+                x + 3, y + 3,
+                fill="yellow",
+                outline="white",
+                tags="roi_line"
+            )
+
+    def delete_roi(self, event=None):
+        """Delete ROI for current image"""
+        if self.GUI.current_image in self.roi_polygons:
+            del self.roi_polygons[self.GUI.current_image]
+            self.canvas.delete("roi_line", "roi_point", "roi_preview")
+            self.GUI.update_box_statistics()
+
+    def point_in_polygon(self, x, y, polygon):
+        """Check if a point is inside a polygon using ray casting algorithm"""
+        n = len(polygon)
+        inside = False
+        p1x, p1y = polygon[0]
+        for i in range(n + 1):
+            p2x, p2y = polygon[i % n]
+            if y > min(p1y, p2y):
+                if y <= max(p1y, p2y):
+                    if x <= max(p1x, p2x):
+                        if p1y != p2y:
+                            xinters = (y - p1y) * (p2x - p1x) / (p2y - p1y) + p1x
+                        if p1x == p2x or x <= xinters:
+                            inside = not inside
+            p1x, p1y = p2x, p2y
+        return inside
+
+    def get_boxes_in_roi(self):
+        """Get boxes that are within the current ROI"""
+        if not self.GUI.current_image or self.GUI.current_image not in self.roi_polygons:
+            return self.get_visible_boxes()
+
+        roi_points = self.roi_polygons[self.GUI.current_image]
+        if not roi_points:
+            return self.get_visible_boxes()
+
+        roi_boxes = []
+        for box in self.get_visible_boxes():
+            # Get box center point
+            center_x = (box[0] + box[2]) / 2
+            center_y = (box[1] + box[3]) / 2
+
+            # Check if center is in ROI
+            if self.point_in_polygon(center_x, center_y, roi_points):
+                roi_boxes.append(box)
+
+        return roi_boxes
+
+
 
     def _bind_events(self):
         self.canvas.bind("<ButtonPress-1>", self.on_button_press)
@@ -834,6 +1036,9 @@ class ModernTiledImageViewer(ctk.CTkFrame):
         if not self.original_image or hasattr(self, '_zooming'):
             return
 
+        # Store ROI state before zooming
+        had_roi = self.GUI.current_image in self.roi_polygons
+
         # Get mouse position relative to canvas and image
         canvas_x = self.canvas.canvasx(event.x)
         canvas_y = self.canvas.canvasy(event.y)
@@ -903,6 +1108,11 @@ class ModernTiledImageViewer(ctk.CTkFrame):
                     self.canvas.delete("tile")
                     self.draw_visible_tiles()
                     self.draw_all_boxes()
+
+                    # Redraw ROI if it existed before zooming
+                    if had_roi:
+                        self.draw_roi()
+
                     self.canvas.xview_moveto(frac_x)
                     self.canvas.yview_moveto(frac_y)
 
@@ -932,6 +1142,10 @@ class ModernTiledImageViewer(ctk.CTkFrame):
         self.canvas.scan_dragto(event.x, event.y, gain=1)
         self.draw_visible_tiles()
         self.draw_all_boxes()
+
+        # Redraw ROI if it exists for current image
+        if self.GUI.current_image in self.roi_polygons:
+            self.draw_roi()
 
     def on_canvas_configure(self, event):
         """Handle canvas resize"""
@@ -1171,6 +1385,21 @@ class ModernVarroaDetectorGUI:
         self.confidence_slider.set(0.1)
         self.confidence_slider.pack(fill="x")
 
+        self.roi_button = ctk.CTkButton(
+            self.sidebar,
+            text="Edit ROI",  # Initial text
+            command=self.toggle_roi_mode,
+            height=35,
+            font=("Inter", 12, "bold"),  # Added bold
+            fg_color=COLORS['secondary'],
+            hover_color=COLORS['accent'],
+            corner_radius=8
+        )
+        self.roi_button.pack(pady=(0, 20), padx=20, fill="x")
+        # Disable ROI button initially
+        self.roi_button.configure(state="disabled")
+
+
         # Add statistics frame
         self.setup_statistics_frame()
 
@@ -1255,6 +1484,22 @@ class ModernVarroaDetectorGUI:
         )
         self.status_bar.pack(side="bottom", fill="x", padx=20, pady=5)
 
+    def toggle_roi_mode(self):
+        if not hasattr(self.image_viewer, 'drawing_roi') or not self.image_viewer.drawing_roi:
+            # Enter ROI editing mode
+            self.roi_button.configure(
+                fg_color=COLORS['primary'],  # Highlight button
+                text="Editing ROI (click here to exit)"  # Update button text
+            )
+            self.image_viewer.start_roi_drawing()
+        else:
+            # Exit ROI editing mode
+            self.roi_button.configure(
+                fg_color=COLORS['secondary'],  # Reset button color
+                text="Edit ROI"  # Restore original text
+            )
+            self.image_viewer.stop_roi_drawing()
+
     # Add this new method to the ModernVarroaDetectorGUI class:
     def cleanup(self, exit_program=True):
         """Clean up temporary files and folders before exit"""
@@ -1303,23 +1548,55 @@ class ModernVarroaDetectorGUI:
         self.total_boxes_label.pack(anchor="w")
 
     def update_box_statistics(self):
-        """Update the box count statistics"""
+        """Update the box count statistics considering ROI if present"""
         # Count boxes in current image
         current_count = 0
         if self.current_image:
-            current_threshold = self.image_confidence_thresholds.get(self.current_image, 0.1)
-            boxes = self.current_boxes.get(self.current_image, [])
-            current_count = sum(1 for box in boxes if box[4] >= current_threshold)
+            # Get boxes within ROI if it exists
+            boxes = self.image_viewer.get_boxes_in_roi()
+            current_count = len(boxes)
 
         # Count total boxes across all images
         total_count = 0
+
+        # Store current image to restore it later
+        temp_current = self.current_image
+
+        # Temporarily store current scale to restore it later
+        temp_scale = self.image_viewer.scale
+
         for image_name, boxes in self.current_boxes.items():
+            # Set current image for ROI checking
+            self.current_image = image_name
             threshold = self.image_confidence_thresholds.get(image_name, 0.1)
-            total_count += sum(1 for box in boxes if box[4] >= threshold)
+
+            # If this image has an ROI
+            if image_name in self.image_viewer.roi_polygons:
+                # Set scale to 1.0 for correct coordinate conversion
+                self.image_viewer.scale = 1.0
+                # Get only boxes that meet threshold
+                self.image_viewer.all_boxes = [box for box in boxes if box[4] >= threshold]
+                # Get boxes within ROI
+                roi_boxes = self.image_viewer.get_boxes_in_roi()
+                total_count += len(roi_boxes)
+            else:
+                # If no ROI, count all boxes that meet threshold
+                total_count += sum(1 for box in boxes if box[4] >= threshold)
+
+        # Restore original current image and scale
+        self.current_image = temp_current
+        self.image_viewer.scale = temp_scale
+
+        # If current image has ROI, update boxes to show only those within ROI
+        if self.current_image:
+            self.image_viewer.all_boxes = self.current_boxes.get(self.current_image, [])
+            if self.current_image in self.image_viewer.roi_polygons:
+                self.image_viewer.draw_all_boxes()
 
         # Update labels
-        self.current_boxes_label.configure(text=f"Current Image: {current_count} varroa mites")
-        self.total_boxes_label.configure(text=f"Total (all images): {total_count} varroa mites")
+        roi_text = " (in ROI)" if self.current_image in self.image_viewer.roi_polygons else ""
+        self.current_boxes_label.configure(text=f"Current Image{roi_text}: {current_count} varroa mites")
+        self.total_boxes_label.configure(text=f"Total (in ROIs or full images): {total_count} varroa mites")
 
     def update_confidence_threshold(self, value):
         """Update confidence threshold for the current image"""
@@ -1343,7 +1620,7 @@ class ModernVarroaDetectorGUI:
         self.root.update_idletasks()
 
     def save_results(self):
-        """Save all images and labels with current thresholds and modifications"""
+        """Save all images and labels with current thresholds and ROIs"""
         try:
             # Disable save button while processing
             self.save_button.configure(state="disabled")
@@ -1359,6 +1636,10 @@ class ModernVarroaDetectorGUI:
             total_files = len(self.current_boxes)
             processed = 0
 
+            # Store current image and scale to restore later
+            temp_current = self.current_image
+            temp_scale = self.image_viewer.scale
+
             # Update initial progress
             self.update_progress(0, "Starting to save results...")
 
@@ -1370,21 +1651,43 @@ class ModernVarroaDetectorGUI:
                 # Get image-specific threshold
                 threshold = self.image_confidence_thresholds.get(image_name, 0.1)
 
-                # Filter boxes based on threshold
-                visible_boxes = [box for box in boxes if box[4] >= threshold]
+                # Filter boxes based on threshold first
+                threshold_boxes = [box for box in boxes if box[4] >= threshold]
+
+                # Set current image for ROI checking
+                self.current_image = image_name
+                self.image_viewer.scale = 1.0  # Set scale to 1.0 for correct coordinate conversion
+
+                # If this image has an ROI, filter boxes by ROI
+                if image_name in self.image_viewer.roi_polygons:
+                    self.image_viewer.all_boxes = threshold_boxes
+                    final_boxes = self.image_viewer.get_boxes_in_roi()
+                else:
+                    final_boxes = threshold_boxes
 
                 # Save image with visible boxes
                 image_path = os.path.join(self.output_path, image_name)
-                self.save_image_with_boxes(image_path, visible_boxes, os.path.join(images_dir, image_name))
+                self.save_image_with_boxes(image_path, final_boxes, os.path.join(images_dir, image_name))
 
                 # Save labels in YOLO format
-                self.save_yolo_labels(image_path, visible_boxes,
+                self.save_yolo_labels(image_path, final_boxes,
                                       os.path.join(labels_dir, os.path.splitext(image_name)[0] + '.txt'))
 
                 processed += 1
 
                 # Force UI update
                 self.root.update()
+
+            # Restore original current image and scale
+            self.current_image = temp_current
+            self.image_viewer.scale = temp_scale
+
+            # Restore current image's boxes
+            if self.current_image:
+                self.image_viewer.all_boxes = self.current_boxes.get(self.current_image, [])
+                self.image_viewer.draw_all_boxes()
+                if self.current_image in self.image_viewer.roi_polygons:
+                    self.image_viewer.draw_roi()
 
             # Update final progress
             self.update_progress(1.0, "Results saved successfully!")
@@ -1417,6 +1720,8 @@ class ModernVarroaDetectorGUI:
             # Add text with detection count
             num_detections = len(boxes)
             text = f"{num_detections} varroa mite{'s' if num_detections != 1 else ''} detected"
+            if self.current_image in self.image_viewer.roi_polygons:
+                text += " in ROI"
 
             # Settings for text background
             font = cv2.FONT_HERSHEY_SIMPLEX
@@ -1442,6 +1747,17 @@ class ModernVarroaDetectorGUI:
             text_x = rect_x1 + padding
             text_y = rect_y1 + text_height + padding
             cv2.putText(image, text, (text_x, text_y), font, font_scale, (0, 0, 0), font_thickness)
+
+            # If there's a ROI, draw it on the saved image
+            if self.current_image in self.image_viewer.roi_polygons:
+                points = self.image_viewer.roi_polygons[self.current_image]
+                points = [(int(x), int(y)) for x, y in points]  # Convert to integer coordinates
+                # Draw filled polygon with some transparency
+                overlay = image.copy()
+                cv2.fillPoly(overlay, [np.array(points)], (0, 255, 255))  # Yellow color (BGR)
+                cv2.addWeighted(overlay, 0.2, image, 0.8, 0, image)  # 20% opacity
+                # Draw ROI outline in yellow
+                cv2.polylines(image, [np.array(points)], True, (0, 255, 255), 2)  # Yellow outline
 
             # Save the image
             cv2.imwrite(output_path, image)
@@ -1794,7 +2110,16 @@ class ModernVarroaDetectorGUI:
             self.image_viewer.load_image(image_path, boxes)
             # Set the correct threshold after loading
             self.image_viewer.set_confidence_threshold(threshold)
+            # Enable ROI button when image is selected
+            self.roi_button.configure(state="normal")
 
+            # Reset ROI button appearance if needed
+            if hasattr(self.image_viewer, 'drawing_roi') and self.image_viewer.drawing_roi:
+                self.roi_button.configure(fg_color=COLORS['secondary'])
+                self.image_viewer.stop_roi_drawing()
+
+            # Draw existing ROI if it exists
+            self.image_viewer.draw_roi()
             # Update statistics
             self.update_box_statistics()
 
@@ -1849,6 +2174,14 @@ class ModernVarroaDetectorGUI:
         - Press (and keep pressing) the key h to temporarily hide the detections. 
         - Once the key h is released, the detections will be shown again
         
+        Region of Interest (ROI):
+        - Click the "Edit ROI" button to define a specific area for counting varroa mites
+        - Left click to add points and create your ROI polygon
+        - Double click to complete the ROI
+        - Right click to delete the current ROI
+        - The statistics will update to show mite counts only within the ROI
+        - ROIs are saved per image and will be included in the final results
+                
         The confidence score can be set up individually for each image. Lower confidence score will show more detections,
         but possibly with more false positives. The Save Button will save the image (with the printed detections) and the
         coordinates of the detections (the labels) in a folder named "results" within the input folder.
