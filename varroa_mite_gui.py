@@ -563,17 +563,26 @@ class ModernTiledImageViewer(ctk.CTkFrame):
             p1x, p1y = p2x, p2y
         return inside
 
-    def get_boxes_in_roi(self):
-        """Get boxes that are within the current ROI"""
+    def get_boxes_in_roi(self, threshold=None):
+        """Get boxes that are within the current ROI using specified threshold"""
         if not self.GUI.current_image or self.GUI.current_image not in self.roi_polygons:
-            return self.get_visible_boxes()
+            # If no threshold provided, use current viewer threshold
+            if threshold is None:
+                return [box for box in self.all_boxes if box[4] >= self.confidence_threshold]
+            return [box for box in self.all_boxes if box[4] >= threshold]
 
         roi_points = self.roi_polygons[self.GUI.current_image]
         if not roi_points:
-            return self.get_visible_boxes()
+            if threshold is None:
+                return [box for box in self.all_boxes if box[4] >= self.confidence_threshold]
+            return [box for box in self.all_boxes if box[4] >= threshold]
+
+        # Filter boxes by threshold first
+        threshold_to_use = threshold if threshold is not None else self.confidence_threshold
+        threshold_boxes = [box for box in self.all_boxes if box[4] >= threshold_to_use]
 
         roi_boxes = []
-        for box in self.get_visible_boxes():
+        for box in threshold_boxes:
             # Get box center point
             center_x = (box[0] + box[2]) / 2
             center_y = (box[1] + box[3]) / 2
@@ -583,8 +592,6 @@ class ModernTiledImageViewer(ctk.CTkFrame):
                 roi_boxes.append(box)
 
         return roi_boxes
-
-
 
     def _bind_events(self):
         self.canvas.bind("<ButtonPress-1>", self.on_button_press)
@@ -1305,7 +1312,7 @@ class ModernVarroaDetectorGUI:
             hover_color=COLORS['accent'],
             corner_radius=8
         )
-        self.select_button.pack(pady=(0, 20), padx=20, fill="x")
+        self.select_button.pack(pady=(0, 10), padx=20, fill="x")
 
         # Save button
         self.save_button = ctk.CTkButton(
@@ -1318,7 +1325,7 @@ class ModernVarroaDetectorGUI:
             hover_color=COLORS['primary'],
             corner_radius=8
         )
-        self.save_button.pack(pady=(0, 20), padx=20, fill="x")
+        self.save_button.pack(pady=(0, 10), padx=20, fill="x")
         # Disable save button initially
         self.save_button.configure(state="disabled")
 
@@ -1364,7 +1371,7 @@ class ModernVarroaDetectorGUI:
             self.sidebar,
             fg_color="transparent"
         )
-        self.confidence_frame.pack(fill="x", padx=20, pady=(0, 20))
+        self.confidence_frame.pack(fill="x", padx=20, pady=(0, 10))
 
         self.confidence_label = ctk.CTkLabel(
             self.confidence_frame,
@@ -1385,17 +1392,31 @@ class ModernVarroaDetectorGUI:
         self.confidence_slider.set(0.1)
         self.confidence_slider.pack(fill="x")
 
+        # Add Apply to All button
+        self.apply_all_button = ctk.CTkButton(
+            self.confidence_frame,
+            text="Apply this threshold to all images",
+            command=self.apply_threshold_to_all,
+            height=30,
+            font=("Inter", 12, "bold"),
+            fg_color=COLORS['secondary'],
+            hover_color=COLORS['accent'],
+            corner_radius=8,
+            state="disabled"  # Start disabled
+        )
+        self.apply_all_button.pack(pady=(10, 0), fill="x")
+
         self.roi_button = ctk.CTkButton(
             self.sidebar,
             text="Edit ROI",  # Initial text
             command=self.toggle_roi_mode,
-            height=35,
+            height=30,
             font=("Inter", 12, "bold"),  # Added bold
             fg_color=COLORS['secondary'],
             hover_color=COLORS['accent'],
             corner_radius=8
         )
-        self.roi_button.pack(pady=(0, 20), padx=20, fill="x")
+        self.roi_button.pack(pady=(0, 10), padx=20, fill="x")
         # Disable ROI button initially
         self.roi_button.configure(state="disabled")
 
@@ -1484,6 +1505,51 @@ class ModernVarroaDetectorGUI:
         )
         self.status_bar.pack(side="bottom", fill="x", padx=20, pady=5)
 
+    def apply_threshold_to_all(self):
+        """Apply the current confidence threshold to all images"""
+        try:
+            # Get current threshold from slider
+            current_threshold = self.confidence_slider.get()
+
+            # Temporarily store current image and image viewer state
+            temp_current = self.current_image
+            temp_scale = self.image_viewer.scale if self.current_image else None
+
+            # Update progress bar
+            self.update_progress(0, "Applying threshold to all images...")
+            total_images = len(self.current_boxes)
+
+            # Update thresholds for all images
+            for idx, image_name in enumerate(self.current_boxes.keys()):
+                # Update progress
+                progress = (idx + 1) / total_images
+                self.update_progress(progress, f"Updating threshold for {image_name}")
+
+                # Set the new threshold for this image
+                self.image_confidence_thresholds[image_name] = current_threshold
+
+                # If this is the current image, update the viewer
+                if image_name == self.current_image and hasattr(self, 'image_viewer'):
+                    self.image_viewer.set_confidence_threshold(current_threshold)
+
+            # Restore original current image and scale
+            self.current_image = temp_current
+            if temp_scale:
+                self.image_viewer.scale = temp_scale
+
+            # Update statistics to reflect new thresholds
+            self.update_box_statistics()
+
+            # Reset progress bar and show completion message
+            self.update_progress(1.0, "Threshold applied to all images")
+            self.root.after(2000, lambda: self.update_progress(0, "Ready"))
+
+        except Exception as e:
+            print(f"Error applying threshold to all images: {str(e)}")
+            messagebox.showerror("Error", f"Error applying threshold: {str(e)}")
+            self.update_progress(0, "Ready")
+
+
     def toggle_roi_mode(self):
         if not hasattr(self.image_viewer, 'drawing_roi') or not self.image_viewer.drawing_roi:
             # Enter ROI editing mode
@@ -1552,51 +1618,48 @@ class ModernVarroaDetectorGUI:
         # Count boxes in current image
         current_count = 0
         if self.current_image:
-            # Get boxes within ROI if it exists
-            boxes = self.image_viewer.get_boxes_in_roi()
+            current_threshold = self.image_confidence_thresholds.get(self.current_image, 0.1)
+            # Get boxes within ROI if it exists, using current image threshold
+            boxes = self.image_viewer.get_boxes_in_roi(threshold=current_threshold)
             current_count = len(boxes)
 
         # Count total boxes across all images
         total_count = 0
-
-        # Store current image to restore it later
-        temp_current = self.current_image
-
-        # Temporarily store current scale to restore it later
-        temp_scale = self.image_viewer.scale
-
         for image_name, boxes in self.current_boxes.items():
-            # Set current image for ROI checking
-            self.current_image = image_name
+            # Get image-specific threshold
             threshold = self.image_confidence_thresholds.get(image_name, 0.1)
 
-            # If this image has an ROI
             if image_name in self.image_viewer.roi_polygons:
-                # Set scale to 1.0 for correct coordinate conversion
-                self.image_viewer.scale = 1.0
-                # Get only boxes that meet threshold
-                self.image_viewer.all_boxes = [box for box in boxes if box[4] >= threshold]
-                # Get boxes within ROI
-                roi_boxes = self.image_viewer.get_boxes_in_roi()
+                # If image has ROI, need to check boxes against it
+                # Temporarily set up image viewer state to check ROI
+                temp_current = self.current_image
+                temp_boxes = self.image_viewer.all_boxes
+
+                # Set up temporary state
+                self.current_image = image_name
+                self.image_viewer.all_boxes = boxes
+
+                # Get boxes within ROI using image-specific threshold
+                roi_boxes = self.image_viewer.get_boxes_in_roi(threshold=threshold)
                 total_count += len(roi_boxes)
+
+                # Restore original state
+                self.current_image = temp_current
+                self.image_viewer.all_boxes = temp_boxes
             else:
-                # If no ROI, count all boxes that meet threshold
+                # If no ROI, just count filtered boxes
                 total_count += sum(1 for box in boxes if box[4] >= threshold)
-
-        # Restore original current image and scale
-        self.current_image = temp_current
-        self.image_viewer.scale = temp_scale
-
-        # If current image has ROI, update boxes to show only those within ROI
-        if self.current_image:
-            self.image_viewer.all_boxes = self.current_boxes.get(self.current_image, [])
-            if self.current_image in self.image_viewer.roi_polygons:
-                self.image_viewer.draw_all_boxes()
 
         # Update labels
         roi_text = " (in ROI)" if self.current_image in self.image_viewer.roi_polygons else ""
         self.current_boxes_label.configure(text=f"Current Image{roi_text}: {current_count} varroa mites")
         self.total_boxes_label.configure(text=f"Total (in ROIs or full images): {total_count} varroa mites")
+
+        # If current image is being displayed, redraw boxes
+        if self.current_image:
+            self.image_viewer.draw_all_boxes()
+            if self.current_image in self.image_viewer.roi_polygons:
+                self.image_viewer.draw_roi()
 
     def update_confidence_threshold(self, value):
         """Update confidence threshold for the current image"""
@@ -1851,6 +1914,7 @@ class ModernVarroaDetectorGUI:
 
     def select_folder(self):
         self.save_button.configure(state="disabled")
+        self.apply_all_button.configure(state="disabled")
         try:
             # Clear the image listbox and disable it
             self.image_listbox.configure(state="normal")  # Enable temporarily to clear
@@ -1894,6 +1958,7 @@ class ModernVarroaDetectorGUI:
             print(f"Error in processing: {str(e)}")
             messagebox.showerror("Error", f"Error in processing: {str(e)}")
         finally:
+            self.select_button.configure(state="normal")
             self.select_button.configure(state="normal")
 
     def process_images(self):
@@ -2043,14 +2108,10 @@ class ModernVarroaDetectorGUI:
             # Update statistics with the newly loaded boxes
             self.update_box_statistics()
 
+            # Enable both save and apply-to-all buttons after successful analysis
             self.save_button.configure(state="normal")
+            self.apply_all_button.configure(state="normal")
 
-            # self.update_progress(1.0, "Analysis complete")
-            # # Enable the listbox after processing is complete
-            # self.image_listbox.configure(state="normal")
-            # self.update_image_list()
-            # # Update statistics
-            # self.update_box_statistics()
         except Exception as e:
             print(f"Error in detection: {str(e)}")
             messagebox.showerror("Error", f"Error in detection: {str(e)}")
@@ -2182,9 +2243,11 @@ class ModernVarroaDetectorGUI:
         - The statistics will update to show mite counts only within the ROI
         - ROIs are saved per image and will be included in the final results
                 
-        The confidence score can be set up individually for each image. Lower confidence score will show more detections,
-        but possibly with more false positives. The Save Button will save the image (with the printed detections) and the
-        coordinates of the detections (the labels) in a folder named "results" within the input folder.
+        The confidence score can be set up individually for each image. Lower confidence score will show more
+        detections, but possibly with more false positives. The "Apply Threshold to All Images" button allows the
+        user to quickly set the same confidence threshold across all the images. The Save Button will save the
+        images (with the printed detections) and the coordinates of the detections (the labels) in a folder named 
+        "results" within the input folder.
         
         This software is completely free. If you wish to collaborate (for instance, providing new images with corrected
         detections to improve the underlying AI model), please contact:
