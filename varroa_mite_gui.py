@@ -1505,6 +1505,19 @@ class ModernVarroaDetectorGUI:
         )
         self.status_bar.pack(side="bottom", fill="x", padx=20, pady=5)
 
+    def get_all_images(self, folder):
+        """Recursively get all JPG and DNG files from folder and subfolders"""
+        image_files = []
+        for root, _, files in os.walk(folder):
+            for f in files:
+                if f.lower().endswith(('.jpg', '.dng')):
+                    # Get the full path and the relative path
+                    full_path = os.path.join(root, f)
+                    rel_path = os.path.relpath(full_path, folder)
+                    image_files.append((full_path, rel_path))
+        return image_files
+
+
     def apply_threshold_to_all(self):
         """Apply the current confidence threshold to all images"""
         try:
@@ -1580,9 +1593,7 @@ class ModernVarroaDetectorGUI:
             if exit_program:
                 self.root.destroy()
 
-    # First, add this new method to the ModernVarroaDetectorGUI class:
     def setup_statistics_frame(self):
-        """Create a frame to display box statistics"""
         self.stats_frame = ctk.CTkFrame(
             self.sidebar,
             fg_color="transparent"
@@ -1605,6 +1616,14 @@ class ModernVarroaDetectorGUI:
         )
         self.current_boxes_label.pack(anchor="w")
 
+        self.subfolder_boxes_label = ctk.CTkLabel(  # New label for subfolder count
+            self.stats_frame,
+            text="Current Subfolder: 0 varroa mites",
+            font=self.default_font,
+            text_color=COLORS['text']
+        )
+        self.subfolder_boxes_label.pack(anchor="w")
+
         self.total_boxes_label = ctk.CTkLabel(
             self.stats_frame,
             text="Total (all images): 0 varroa mites",
@@ -1613,49 +1632,216 @@ class ModernVarroaDetectorGUI:
         )
         self.total_boxes_label.pack(anchor="w")
 
+    # def update_box_statistics(self):
+    #     """Update the box count statistics considering ROI if present"""
+    #     # Count boxes in current image
+    #     current_count = 0
+    #     subfolder_count = 0
+    #
+    #     if self.current_image:
+    #         current_threshold = self.image_confidence_thresholds.get(self.current_image, 0.1)
+    #         boxes = self.image_viewer.get_boxes_in_roi(threshold=current_threshold)
+    #         current_count = len(boxes)
+    #
+    #         # Get current subfolder
+    #         current_folder = os.path.dirname(self.current_image)
+    #
+    #         # Find all images in the same subfolder
+    #         subfolder_images = []
+    #         for root, _, files in os.walk(self.output_path):
+    #             for f in files:
+    #                 if f.lower().endswith('.jpg'):
+    #                     # Get relative path
+    #                     rel_path = os.path.relpath(os.path.join(root, f), self.output_path)
+    #                     if os.path.dirname(rel_path) == current_folder:
+    #                         subfolder_images.append(rel_path)
+    #
+    #         # Count boxes in all images from the same subfolder
+    #         for image_name in subfolder_images:
+    #             # Load boxes if not already loaded
+    #             if image_name not in self.current_boxes:
+    #                 self.load_boxes_for_image(image_name)
+    #
+    #             if image_name in self.current_boxes:
+    #                 threshold = self.image_confidence_thresholds.get(image_name, 0.1)
+    #                 boxes = self.current_boxes[image_name]
+    #
+    #                 if image_name in self.image_viewer.roi_polygons:
+    #                     # Temporarily set up image viewer state to check ROI
+    #                     temp_current = self.current_image
+    #                     temp_boxes = self.image_viewer.all_boxes
+    #
+    #                     self.current_image = image_name
+    #                     self.image_viewer.all_boxes = boxes
+    #
+    #                     roi_boxes = self.image_viewer.get_boxes_in_roi(threshold=threshold)
+    #                     subfolder_count += len(roi_boxes)
+    #
+    #                     # Restore original state
+    #                     self.current_image = temp_current
+    #                     self.image_viewer.all_boxes = temp_boxes
+    #                 else:
+    #                     subfolder_count += sum(1 for box in boxes if box[4] >= threshold)
+    #
+    #     # Count total boxes across all images
+    #     total_count = 0
+    #     for image_name, boxes in self.current_boxes.items():
+    #         threshold = self.image_confidence_thresholds.get(image_name, 0.1)
+    #
+    #         if image_name in self.image_viewer.roi_polygons:
+    #             temp_current = self.current_image
+    #             temp_boxes = self.image_viewer.all_boxes
+    #
+    #             self.current_image = image_name
+    #             self.image_viewer.all_boxes = boxes
+    #
+    #             roi_boxes = self.image_viewer.get_boxes_in_roi(threshold=threshold)
+    #             total_count += len(roi_boxes)
+    #
+    #             self.current_image = temp_current
+    #             self.image_viewer.all_boxes = temp_boxes
+    #         else:
+    #             total_count += sum(1 for box in boxes if box[4] >= threshold)
+    #
+    #     # Update labels
+    #     roi_text = " (in ROI)" if self.current_image in self.image_viewer.roi_polygons else ""
+    #     current_folder_text = f" ({os.path.dirname(self.current_image)})" if self.current_image and os.path.dirname(
+    #         self.current_image) else ""
+    #
+    #     self.current_boxes_label.configure(text=f"Current Image{roi_text}: {current_count} varroa mites")
+    #     self.subfolder_boxes_label.configure(
+    #         text=f"Current Subfolder{current_folder_text}: {subfolder_count} varroa mites")
+    #     self.total_boxes_label.configure(text=f"Total (in ROIs or full images): {total_count} varroa mites")
+    #
+    #     # Update display
+    #     if self.current_image:
+    #         self.image_viewer.draw_all_boxes()
+    #         if self.current_image in self.image_viewer.roi_polygons:
+    #             self.image_viewer.draw_roi()
+
     def update_box_statistics(self):
         """Update the box count statistics considering ROI if present"""
-        # Count boxes in current image
+        # Initialize counts
         current_count = 0
+        subfolder_count = 0
+        total_count = 0
+
+        # Check if output path exists
+        if not hasattr(self, 'output_path') or not self.output_path or not os.path.exists(self.output_path):
+            # Update labels with zero counts
+            self.current_boxes_label.configure(text="Current Image: 0 varroa mites")
+            self.subfolder_boxes_label.configure(text="Current Subfolder: 0 varroa mites")
+            self.total_boxes_label.configure(text="Total (in ROIs or full images): 0 varroa mites")
+            return
+
+        # Process current image and subfolder if one is selected
         if self.current_image:
+            # Current image count
             current_threshold = self.image_confidence_thresholds.get(self.current_image, 0.1)
-            # Get boxes within ROI if it exists, using current image threshold
             boxes = self.image_viewer.get_boxes_in_roi(threshold=current_threshold)
             current_count = len(boxes)
 
-        # Count total boxes across all images
-        total_count = 0
-        for image_name, boxes in self.current_boxes.items():
-            # Get image-specific threshold
-            threshold = self.image_confidence_thresholds.get(image_name, 0.1)
+            # Get current subfolder
+            current_folder = os.path.dirname(self.current_image)
 
-            if image_name in self.image_viewer.roi_polygons:
-                # If image has ROI, need to check boxes against it
-                # Temporarily set up image viewer state to check ROI
-                temp_current = self.current_image
-                temp_boxes = self.image_viewer.all_boxes
+            # Find all images in the same subfolder
+            subfolder_images = []
+            for root, _, files in os.walk(self.output_path):
+                if "predict 0.1" in root:  # Skip predict directory
+                    continue
+                for f in files:
+                    if f.lower().endswith('.jpg'):
+                        try:
+                            rel_path = os.path.relpath(os.path.join(root, f), self.output_path)
+                            if os.path.dirname(rel_path) == current_folder:
+                                subfolder_images.append(rel_path)
+                        except Exception as e:
+                            print(f"Error processing path: {str(e)}")
 
-                # Set up temporary state
-                self.current_image = image_name
-                self.image_viewer.all_boxes = boxes
+            # Count boxes in all images from the same subfolder
+            for image_name in subfolder_images:
+                try:
+                    # Load boxes if not already loaded
+                    if image_name not in self.current_boxes:
+                        self.load_boxes_for_image(image_name)
 
-                # Get boxes within ROI using image-specific threshold
-                roi_boxes = self.image_viewer.get_boxes_in_roi(threshold=threshold)
-                total_count += len(roi_boxes)
+                    if image_name in self.current_boxes:
+                        threshold = self.image_confidence_thresholds.get(image_name, 0.1)
+                        boxes = self.current_boxes[image_name]
 
-                # Restore original state
-                self.current_image = temp_current
-                self.image_viewer.all_boxes = temp_boxes
-            else:
-                # If no ROI, just count filtered boxes
-                total_count += sum(1 for box in boxes if box[4] >= threshold)
+                        if image_name in self.image_viewer.roi_polygons:
+                            temp_current = self.current_image
+                            temp_boxes = self.image_viewer.all_boxes
+
+                            self.current_image = image_name
+                            self.image_viewer.all_boxes = boxes
+
+                            roi_boxes = self.image_viewer.get_boxes_in_roi(threshold=threshold)
+                            subfolder_count += len(roi_boxes)
+
+                            self.current_image = temp_current
+                            self.image_viewer.all_boxes = temp_boxes
+                        else:
+                            subfolder_count += sum(1 for box in boxes if box[4] >= threshold)
+                except Exception as e:
+                    print(f"Error processing subfolder image {image_name}: {str(e)}")
+
+        # Count total boxes across ALL images in all directories
+        try:
+            # Find all images in the output directory and its subdirectories
+            all_images = []
+            for root, _, files in os.walk(self.output_path):
+                if "predict 0.1" in root:  # Skip predict directory
+                    continue
+                for f in files:
+                    if f.lower().endswith('.jpg'):
+                        try:
+                            rel_path = os.path.relpath(os.path.join(root, f), self.output_path)
+                            all_images.append(rel_path)
+                        except Exception as e:
+                            print(f"Error processing path: {str(e)}")
+
+            # Process each image
+            for image_name in all_images:
+                try:
+                    # Load boxes if not already loaded
+                    if image_name not in self.current_boxes:
+                        self.load_boxes_for_image(image_name)
+
+                    if image_name in self.current_boxes:
+                        threshold = self.image_confidence_thresholds.get(image_name, 0.1)
+                        boxes = self.current_boxes[image_name]
+
+                        if image_name in self.image_viewer.roi_polygons:
+                            temp_current = self.current_image
+                            temp_boxes = self.image_viewer.all_boxes
+
+                            self.current_image = image_name
+                            self.image_viewer.all_boxes = boxes
+
+                            roi_boxes = self.image_viewer.get_boxes_in_roi(threshold=threshold)
+                            total_count += len(roi_boxes)
+
+                            self.current_image = temp_current
+                            self.image_viewer.all_boxes = temp_boxes
+                        else:
+                            total_count += sum(1 for box in boxes if box[4] >= threshold)
+                except Exception as e:
+                    print(f"Error processing image {image_name}: {str(e)}")
+        except Exception as e:
+            print(f"Error calculating total count: {str(e)}")
 
         # Update labels
-        roi_text = " (in ROI)" if self.current_image in self.image_viewer.roi_polygons else ""
+        roi_text = " (in ROI)" if self.current_image and self.current_image in self.image_viewer.roi_polygons else ""
+        current_folder_text = f" ({os.path.dirname(self.current_image)})" if self.current_image and os.path.dirname(
+            self.current_image) else ""
+
         self.current_boxes_label.configure(text=f"Current Image{roi_text}: {current_count} varroa mites")
+        self.subfolder_boxes_label.configure(
+            text=f"Current Subfolder{current_folder_text}: {subfolder_count} varroa mites")
         self.total_boxes_label.configure(text=f"Total (in ROIs or full images): {total_count} varroa mites")
 
-        # If current image is being displayed, redraw boxes
+        # Update display
         if self.current_image:
             self.image_viewer.draw_all_boxes()
             if self.current_image in self.image_viewer.roi_polygons:
@@ -1682,94 +1868,12 @@ class ModernVarroaDetectorGUI:
         self.status_bar.configure(text=text)
         self.root.update_idletasks()
 
-    def save_results(self):
-        """Save all images and labels with current thresholds and ROIs"""
-        try:
-            # Disable save button while processing
-            self.save_button.configure(state="disabled")
-
-            # Create results directory structure
-            results_dir = os.path.join(self.current_folder, "results")
-            images_dir = os.path.join(results_dir, "images")
-            labels_dir = os.path.join(results_dir, "labels")
-
-            os.makedirs(images_dir, exist_ok=True)
-            os.makedirs(labels_dir, exist_ok=True)
-
-            total_files = len(self.current_boxes)
-            processed = 0
-
-            # Store current image and scale to restore later
-            temp_current = self.current_image
-            temp_scale = self.image_viewer.scale
-
-            # Update initial progress
-            self.update_progress(0, "Starting to save results...")
-
-            for image_name, boxes in self.current_boxes.items():
-                # Calculate and update progress
-                progress = processed / total_files
-                self.update_progress(progress, f"Saving results: {image_name} ({processed}/{total_files})")
-
-                # Get image-specific threshold
-                threshold = self.image_confidence_thresholds.get(image_name, 0.1)
-
-                # Filter boxes based on threshold first
-                threshold_boxes = [box for box in boxes if box[4] >= threshold]
-
-                # Set current image for ROI checking
-                self.current_image = image_name
-                self.image_viewer.scale = 1.0  # Set scale to 1.0 for correct coordinate conversion
-
-                # If this image has an ROI, filter boxes by ROI
-                if image_name in self.image_viewer.roi_polygons:
-                    self.image_viewer.all_boxes = threshold_boxes
-                    final_boxes = self.image_viewer.get_boxes_in_roi()
-                else:
-                    final_boxes = threshold_boxes
-
-                # Save image with visible boxes
-                image_path = os.path.join(self.output_path, image_name)
-                self.save_image_with_boxes(image_path, final_boxes, os.path.join(images_dir, image_name))
-
-                # Save labels in YOLO format
-                self.save_yolo_labels(image_path, final_boxes,
-                                      os.path.join(labels_dir, os.path.splitext(image_name)[0] + '.txt'))
-
-                processed += 1
-
-                # Force UI update
-                self.root.update()
-
-            # Restore original current image and scale
-            self.current_image = temp_current
-            self.image_viewer.scale = temp_scale
-
-            # Restore current image's boxes
-            if self.current_image:
-                self.image_viewer.all_boxes = self.current_boxes.get(self.current_image, [])
-                self.image_viewer.draw_all_boxes()
-                if self.current_image in self.image_viewer.roi_polygons:
-                    self.image_viewer.draw_roi()
-
-            # Update final progress
-            self.update_progress(1.0, "Results saved successfully!")
-            messagebox.showinfo("Success", f"Results saved to {results_dir}")
-
-        except Exception as e:
-            print(f"Error saving results: {str(e)}")
-            messagebox.showerror("Error", f"Error saving results: {str(e)}")
-
-        finally:
-            # Re-enable save button
-            self.save_button.configure(state="normal")
-
-            # Reset progress bar after a short delay
-            self.root.after(2000, lambda: self.update_progress(0, "Ready"))
-
     def save_image_with_boxes(self, image_path, boxes, output_path):
         """Save image with visible bounding boxes drawn on it and detection count"""
         try:
+            # Create the output directory if it doesn't exist
+            os.makedirs(os.path.dirname(output_path), exist_ok=True)
+
             # Read the image
             image = cv2.imread(image_path)
             if image is None:
@@ -1831,6 +1935,9 @@ class ModernVarroaDetectorGUI:
     def save_yolo_labels(self, image_path, boxes, output_path):
         """Save bounding boxes in YOLO format"""
         try:
+            # Create the output directory if it doesn't exist
+            os.makedirs(os.path.dirname(output_path), exist_ok=True)
+
             # Read image dimensions
             image = cv2.imread(image_path)
             if image is None:
@@ -1842,7 +1949,6 @@ class ModernVarroaDetectorGUI:
             with open(output_path, 'w') as f:
                 for box in boxes:
                     x1, y1, x2, y2 = map(float, box[:4])
-                    confidence = box[4]
 
                     # Convert to YOLO format (normalized coordinates)
                     x_center = ((x1 + x2) / 2) / img_width
@@ -1850,16 +1956,115 @@ class ModernVarroaDetectorGUI:
                     width = (x2 - x1) / img_width
                     height = (y2 - y1) / img_height
 
-                    # Write in YOLO format: class x_center y_center width height confidence
-                    #f.write(f"0 {x_center} {y_center} {width} {height} {confidence}\n")
-                    # I delete the confidence
+                    # Write in YOLO format: class x_center y_center width height
                     f.write(f"0 {x_center} {y_center} {width} {height}\n")
 
         except Exception as e:
             print(f"Error saving YOLO labels: {str(e)}")
             raise
 
+    def save_results(self):
+        """Save all images and labels with current thresholds and ROIs"""
+        try:
+            # Disable save button while processing
+            self.save_button.configure(state="disabled")
 
+            # Create results directory structure
+            results_dir = os.path.join(self.current_folder, "results")
+            images_dir = os.path.join(results_dir, "images")
+            labels_dir = os.path.join(results_dir, "labels")
+
+            os.makedirs(images_dir, exist_ok=True)
+            os.makedirs(labels_dir, exist_ok=True)
+
+            # Get all images, including those in subdirectories
+            all_images = []
+            for root, _, files in os.walk(self.output_path):
+                if "predict 0.1" in root:  # Skip predict directory
+                    continue
+                for f in files:
+                    if f.lower().endswith('.jpg'):
+                        rel_path = os.path.relpath(os.path.join(root, f), self.output_path)
+                        all_images.append(rel_path)
+
+            total_files = len(all_images)
+            processed = 0
+
+            # Store current image and scale to restore later
+            temp_current = self.current_image
+            temp_scale = self.image_viewer.scale
+
+            # Update initial progress
+            self.update_progress(0, "Starting to save results...")
+
+            for image_name in all_images:
+                # Calculate and update progress
+                progress = processed / total_files
+                self.update_progress(progress, f"Saving results: {image_name} ({processed}/{total_files})")
+
+                # Get image-specific threshold
+                threshold = self.image_confidence_thresholds.get(image_name, 0.1)
+
+                # Load boxes if not already loaded
+                if image_name not in self.current_boxes:
+                    self.load_boxes_for_image(image_name)
+
+                # Filter boxes based on threshold
+                threshold_boxes = [box for box in self.current_boxes.get(image_name, []) if box[4] >= threshold]
+
+                # Set current image for ROI checking
+                self.current_image = image_name
+                self.image_viewer.scale = 1.0
+
+                # If this image has an ROI, filter boxes by ROI
+                if image_name in self.image_viewer.roi_polygons:
+                    self.image_viewer.all_boxes = threshold_boxes
+                    final_boxes = self.image_viewer.get_boxes_in_roi()
+                else:
+                    final_boxes = threshold_boxes
+
+                # Create subdirectory structure in output if needed
+                subdir = os.path.dirname(image_name)
+                if subdir:
+                    os.makedirs(os.path.join(images_dir, subdir), exist_ok=True)
+                    os.makedirs(os.path.join(labels_dir, subdir), exist_ok=True)
+
+                # Save image with visible boxes
+                image_path = os.path.join(self.output_path, image_name)
+                output_image_path = os.path.join(images_dir, image_name)
+                self.save_image_with_boxes(image_path, final_boxes, output_image_path)
+
+                # Save labels in YOLO format
+                output_label_path = os.path.join(labels_dir, os.path.splitext(image_name)[0] + '.txt')
+                self.save_yolo_labels(image_path, final_boxes, output_label_path)
+
+                processed += 1
+                self.root.update()
+
+            # Restore original current image and scale
+            self.current_image = temp_current
+            self.image_viewer.scale = temp_scale
+
+            # Restore current image's boxes
+            if self.current_image:
+                self.image_viewer.all_boxes = self.current_boxes.get(self.current_image, [])
+                self.image_viewer.draw_all_boxes()
+                if self.current_image in self.image_viewer.roi_polygons:
+                    self.image_viewer.draw_roi()
+
+            # Update final progress
+            self.update_progress(1.0, "Results saved successfully!")
+            messagebox.showinfo("Success", f"Results saved to {results_dir}")
+
+        except Exception as e:
+            print(f"Error saving results: {str(e)}")
+            messagebox.showerror("Error", f"Error saving results: {str(e)}")
+
+        finally:
+            # Re-enable save button
+            self.save_button.configure(state="normal")
+            # Reset progress bar after a short delay
+            self.root.after(2000, lambda: self.update_progress(0, "Ready"))
 
     def load_boxes_for_image(self, image_name):
         """Load all detection boxes for an image"""
@@ -1873,10 +2078,20 @@ class ModernVarroaDetectorGUI:
                 img_h, img_w = img.shape[:2]
 
                 # Load all detection results
-                boxes = []
-                labels_path = os.path.join(self.output_path, "predict 0.1", "labels",
-                                           os.path.splitext(image_name)[0] + ".txt")
+                # Split the image_name into directory and filename parts
+                image_dir = os.path.dirname(image_name)
+                image_basename = os.path.basename(image_name)
 
+                # Construct the path to the labels file
+                labels_path = os.path.join(
+                    self.output_path,
+                    "predict 0.1",
+                    image_dir,  # Include subdirectory path
+                    "labels",
+                    os.path.splitext(image_basename)[0] + ".txt"
+                )
+
+                boxes = []
                 if os.path.exists(labels_path):
                     with open(labels_path, 'r') as f:
                         for line in f:
@@ -1962,13 +2177,11 @@ class ModernVarroaDetectorGUI:
             self.select_button.configure(state="normal")
 
     def process_images(self):
-        # Update file extension check to include both JPG and DNG
-        file_images = [f for f in os.listdir(self.current_folder)
-                       if os.path.isfile(os.path.join(self.current_folder, f))
-                       and f.lower().endswith(('.jpg', '.dng'))]
+        # Get all images recursively
+        file_images = self.get_all_images(self.current_folder)
 
         if not file_images:
-            messagebox.showwarning("Warning", "No JPG or DNG images found in selected folder")
+            messagebox.showwarning("Warning", "No JPG or DNG images found in selected folder or subfolders")
             self.select_button.configure(state="normal")
             return
 
@@ -1978,32 +2191,33 @@ class ModernVarroaDetectorGUI:
         print("**********************************")
 
         total_files = len(file_images)
-        for idx, img_name in enumerate(file_images, 1):
-            input_path = os.path.join(self.current_folder, img_name)
+        for idx, (input_path, rel_path) in enumerate(file_images, 1):
+            # Create output directory structure matching input
+            output_dir = os.path.join(self.output_path, os.path.dirname(rel_path))
+            os.makedirs(output_dir, exist_ok=True)
+
             # Always save output as JPG
             output_path = os.path.join(self.output_path,
-                                       os.path.splitext(img_name)[0] + '.jpg')
+                                       os.path.splitext(rel_path)[0] + '.jpg')
 
             try:
                 progress = idx / total_files
-                self.update_progress(progress, f"Processing image {idx}/{total_files}: {img_name}")
+                self.update_progress(progress, f"Processing image {idx}/{total_files}: {rel_path}")
 
                 # Handle DNG files
-                if img_name.lower().endswith('.dng'):
-                    # Process DNG file
+                if input_path.lower().endswith('.dng'):
                     img = process_dng(input_path)
                     if img is None:
-                        print(f"Failed to process DNG file: {img_name}")
+                        print(f"Failed to process DNG file: {rel_path}")
                         continue
 
-                    # Process the converted image with green line detection
                     crop_img = crop_green_lines_from_array(img)
                     if crop_img is None:
-                        cv2.imwrite(output_path, img)  # Save the original converted image
+                        cv2.imwrite(output_path, img)
                     else:
                         cv2.imwrite(output_path, crop_img)
                 else:
-                    # Handle JPG files as before
+                    # Handle JPG files
                     crop_img = crop_green_lines(input_path)
                     if crop_img is None:
                         shutil.copyfile(input_path, output_path)
@@ -2011,8 +2225,8 @@ class ModernVarroaDetectorGUI:
                         cv2.imwrite(output_path, crop_img)
 
             except Exception as e:
-                print(f"Error processing image {img_name}: {str(e)}")
-                if not img_name.lower().endswith('.dng'):
+                print(f"Error processing image {rel_path}: {str(e)}")
+                if not input_path.lower().endswith('.dng'):
                     shutil.copyfile(input_path, output_path)
 
     def run_detection(self):
@@ -2021,9 +2235,15 @@ class ModernVarroaDetectorGUI:
             return
 
         try:
-            file_images = [os.path.join(self.output_path, f)
-                           for f in os.listdir(self.output_path)
-                           if f.lower().endswith('.jpg')]
+            # Recursively find all JPG files in output_path and its subdirectories
+            file_images = []
+            for root, _, files in os.walk(self.output_path):
+                for f in files:
+                    if f.lower().endswith('.jpg'):
+                        # Get full path but store relative path for later use
+                        full_path = os.path.join(root, f)
+                        rel_path = os.path.relpath(full_path, self.output_path)
+                        file_images.append((full_path, rel_path))
 
             print("\n**********************************")
             print("STEP 2: Performing inference")
@@ -2033,73 +2253,100 @@ class ModernVarroaDetectorGUI:
             suma = 0
             conf = 0.1
 
-            for idx, img in enumerate(file_images, 1):
+            for idx, (img_path, rel_path) in enumerate(file_images, 1):
                 try:
                     progress = idx / total_files
                     self.update_progress(progress, f"Analyzing image {idx}/{total_files}")
 
+                    # Create the output directory structure matching input
+                    output_dir = os.path.join(self.output_path, "predict 0.1")
+                    labels_dir = os.path.join(output_dir, "labels")
+                    os.makedirs(labels_dir, exist_ok=True)
+
+                    # Create output directories preserving structure
+                    rel_dir = os.path.dirname(rel_path)
+                    predict_dir = os.path.join(self.output_path, "predict 0.1")
+                    output_dir = os.path.join(predict_dir, rel_dir) if rel_dir else predict_dir
+                    os.makedirs(output_dir, exist_ok=True)
+
                     results = self.model(
-                        img, imgsz=(6016), max_det=2000, conf=0.1,  # Changed to 0.1
-                        save=True, show_labels=False, line_width=2, save_txt=True, save_conf = True,
-                        project=self.output_path, name="predict 0.1",  # Changed folder name
+                        img_path, imgsz=(6016), max_det=2000, conf=0.1,
+                        save=True, show_labels=False, line_width=2, save_txt=True, save_conf=True,
+                        project=os.path.dirname(output_dir),
+                        name=os.path.basename(output_dir) if rel_dir else "predict 0.1",
                         verbose=False, batch=1, exist_ok=True
                     )
 
                     # Save results with confidence scores
                     for result in results:
-                        print(f"Total varroas in file {os.path.basename(result.path)}: {len(result.boxes)}")
+                        print(f"Total varroas in file {rel_path}: {len(result.boxes)}")
                         suma += len(result.boxes)
                         if len(result.boxes) > 0:
+                            # Ensure subdirectory structure exists in labels directory
+                            rel_dir = os.path.dirname(rel_path)
+                            if rel_dir:
+                                os.makedirs(os.path.join(labels_dir, rel_dir), exist_ok=True)
+
+                                # Create output file path preserving directory structure
                             output_file = os.path.join(
-                                self.output_path,
-                                "predict 0.1",
+                                os.path.dirname(output_dir),
+                                os.path.basename(output_dir),
                                 "labels",
-                                f"{os.path.splitext(os.path.basename(result.path))[0]}.txt"
+                                os.path.splitext(os.path.basename(rel_path))[0] + '.txt'
                             )
+
+                            # Ensure the directory exists
+                            os.makedirs(os.path.dirname(output_file), exist_ok=True)
 
                             with open(output_file, 'w') as f:
                                 for box in result.boxes:
-                                    # Get confidence score
                                     conf = float(box.conf)
-                                    # Get normalized coordinates
                                     x, y, w, h = box.xywhn[0].tolist()
-                                    # Write with confidence score
                                     f.write(f"0 {x} {y} {w} {h} {conf}\n")
                 except Exception as e:
-                    print(f"Error analyzing image {os.path.basename(img)}: {str(e)}")
+                    print(f"Error analyzing image {rel_path}: {str(e)}")
 
             print("\nTotal varroas detected:", suma)
+
             # Initialize current_boxes dictionary with detections from txt files
             labels_dir = os.path.join(self.output_path, "predict 0.1", "labels")
             if os.path.exists(labels_dir):
-                for txt_file in os.listdir(labels_dir):
-                    if txt_file.endswith('.txt'):
-                        image_name = txt_file.replace('.txt', '.jpg')
-                        txt_path = os.path.join(labels_dir, txt_file)
-                        boxes = []
+                # Walk through all subdirectories in labels_dir
+                for root, _, files in os.walk(labels_dir):
+                    for txt_file in files:
+                        if txt_file.endswith('.txt'):
+                            # Get relative path from labels_dir to txt file
+                            rel_txt_path = os.path.relpath(os.path.join(root, txt_file), labels_dir)
+                            # Convert to corresponding image path
+                            image_rel_path = os.path.splitext(rel_txt_path)[0] + '.jpg'
 
-                        # Get image dimensions
-                        img_path = os.path.join(self.output_path, image_name)
-                        img = cv2.imread(img_path)
-                        if img is not None:
-                            img_h, img_w = img.shape[:2]
+                            # Full paths for both txt and image files
+                            txt_path = os.path.join(root, txt_file)
+                            img_path = os.path.join(self.output_path, image_rel_path)
 
-                            # Read boxes from txt file
-                            with open(txt_path, 'r') as f:
-                                for line in f:
-                                    parts = line.strip().split()
-                                    class_id, x, y, w, h, confidence = map(float, parts)
+                            boxes = []
 
-                                    # Convert normalized coordinates to pixel coordinates
-                                    x1 = int((x - w / 2) * img_w)
-                                    y1 = int((y - h / 2) * img_h)
-                                    x2 = int((x + w / 2) * img_w)
-                                    y2 = int((y + h / 2) * img_h)
-                                    boxes.append([x1, y1, x2, y2, confidence])
+                            # Get image dimensions
+                            img = cv2.imread(img_path)
+                            if img is not None:
+                                img_h, img_w = img.shape[:2]
 
-                            self.current_boxes[image_name] = boxes
-                            # Set initial confidence threshold for this image
-                            self.image_confidence_thresholds[image_name] = 0.1
+                                # Read boxes from txt file
+                                with open(txt_path, 'r') as f:
+                                    for line in f:
+                                        parts = line.strip().split()
+                                        class_id, x, y, w, h, confidence = map(float, parts)
+
+                                        # Convert normalized coordinates to pixel coordinates
+                                        x1 = int((x - w / 2) * img_w)
+                                        y1 = int((y - h / 2) * img_h)
+                                        x2 = int((x + w / 2) * img_w)
+                                        y2 = int((y + h / 2) * img_h)
+                                        boxes.append([x1, y1, x2, y2, confidence])
+
+                                self.current_boxes[image_rel_path] = boxes
+                                # Set initial confidence threshold for this image
+                                self.image_confidence_thresholds[image_rel_path] = 0.1
 
             self.update_progress(1.0, "Analysis complete")
             # Enable the listbox after processing is complete
@@ -2119,24 +2366,55 @@ class ModernVarroaDetectorGUI:
     def update_image_list(self):
         self.image_listbox.delete(0, tk.END)
         if self.output_path and os.path.exists(self.output_path):
-            files = [f for f in os.listdir(self.output_path)
-                     if f.lower().endswith('.jpg')]
-            max_width = 35  # Maximum characters to display
+            # Get all jpg files recursively, excluding predict 0.1 directory
+            files = []
+            for root, _, filenames in os.walk(self.output_path):
+                # Skip the predict 0.1 directory and its subdirectories
+                if "predict 0.1" in root:
+                    continue
+
+                for f in filenames:
+                    if f.lower().endswith('.jpg'):
+                        rel_path = os.path.relpath(os.path.join(root, f), self.output_path)
+                        files.append(rel_path)
+
+            max_width = 50  # Increased to accommodate paths
             for file in sorted(files):
                 # Truncate long filenames
                 if len(file) > max_width:
-                    display_name = file[:max_width-3] + "..."
+                    display_name = "..." + file[-(max_width - 3):]
                 else:
                     display_name = file
-                # Add padding using spaces at the start and end of each item
-                padded_file = f"  {display_name}  "  # Add padding spaces
+
+                # Add padding using spaces
+                padded_file = f"  {display_name}  "
                 self.image_listbox.insert(tk.END, padded_file)
+
                 # Store the full filename for reference
                 self.image_listbox.fullnames = getattr(self.image_listbox, 'fullnames', {})
                 self.image_listbox.fullnames[display_name] = file
 
-            # Add extra visual spacing using empty items
+            # Add extra visual spacing
             self.image_listbox.insert(tk.END, "")
+
+    def highlight_same_folder_images(self):
+        if not self.current_image:
+            return
+
+        current_folder = os.path.dirname(self.current_image)
+
+        # Reset all items to default background
+        for i in range(self.image_listbox.size()):
+            self.image_listbox.itemconfig(i, {'bg': COLORS['background']})
+
+        # Highlight items from the same folder
+        for i in range(self.image_listbox.size()):
+            item = self.image_listbox.get(i).strip()
+            if item:  # Skip empty items
+                full_name = self.image_listbox.fullnames.get(item.strip(), item.strip())
+                if os.path.dirname(full_name) == current_folder:
+                    # Use a lighter shade of blue for highlighting
+                    self.image_listbox.itemconfig(i, {'bg': '#E3F2FD'})  # Light blue
 
     def on_select_image(self, event):
         if not self.image_listbox.curselection():
@@ -2153,35 +2431,29 @@ class ModernVarroaDetectorGUI:
             # Update current image
             self.current_image = selected
 
-            # Get image path
+            # Highlight same-folder images
+            self.highlight_same_folder_images()
+
+            # Rest of the existing code...
             image_path = os.path.join(self.output_path, selected)
             if not os.path.exists(image_path):
                 messagebox.showerror("Error", f"Image file not found: {image_path}")
                 return
 
-            # Load boxes for this image
             boxes = self.load_boxes_for_image(selected)
-
-            # Update slider to show this image's threshold
             threshold = self.image_confidence_thresholds.get(selected, 0.1)
             self.confidence_slider.set(threshold)
             self.confidence_label.configure(text=f"Confidence Threshold: {threshold:.2f}")
 
-            # Load the image and all boxes in the viewer
             self.image_viewer.load_image(image_path, boxes)
-            # Set the correct threshold after loading
             self.image_viewer.set_confidence_threshold(threshold)
-            # Enable ROI button when image is selected
             self.roi_button.configure(state="normal")
 
-            # Reset ROI button appearance if needed
             if hasattr(self.image_viewer, 'drawing_roi') and self.image_viewer.drawing_roi:
                 self.roi_button.configure(fg_color=COLORS['secondary'])
                 self.image_viewer.stop_roi_drawing()
 
-            # Draw existing ROI if it exists
             self.image_viewer.draw_roi()
-            # Update statistics
             self.update_box_statistics()
 
         except Exception as e:
@@ -2192,7 +2464,7 @@ class ModernVarroaDetectorGUI:
         """Show help dialog with information about the program"""
         help_window = ctk.CTkToplevel(self.root)
         help_window.title("VarroDetector - Help")
-        help_window.geometry("600x500")
+        help_window.geometry("750x600")
 
         # Make the window modal
         help_window.transient(self.root)
@@ -2243,14 +2515,16 @@ class ModernVarroaDetectorGUI:
         - The statistics will update to show mite counts only within the ROI
         - ROIs are saved per image and will be included in the final results
                 
-        The confidence score can be set up individually for each image. Lower confidence score will show more
-        detections, but possibly with more false positives. The "Apply Threshold to All Images" button allows the
-        user to quickly set the same confidence threshold across all the images. The Save Button will save the
-        images (with the printed detections) and the coordinates of the detections (the labels) in a folder named 
-        "results" within the input folder.
         
-        This software is completely free. If you wish to collaborate (for instance, providing new images with corrected
-        detections to improve the underlying AI model), please contact:
+        The analysis will be also performed to any image contained in subfolders of the input folder. The confidence
+        score can be set up individually for each image. Lower confidence score will show more detections, but 
+        possibly with more false positives. The "Apply Threshold to All Images" button allows the user to quickly 
+        set the same confidence threshold across all the images. The Save Button will save the images (with the 
+        printed detections) and the coordinates of the detections (the labels) in a folder named  "results" within 
+        the input folder.
+        
+        This software is completely free. If you wish to collaborate (for instance, providing new images with 
+        corrected detections to improve the underlying AI model), please contact:
         - Jose Divasón (jose.divason@unirioja.es)
         - Jesús Yániz (jyaniz@unizar.es)
 
