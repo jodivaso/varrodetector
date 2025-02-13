@@ -13,6 +13,7 @@ import math
 from concurrent.futures import ThreadPoolExecutor
 from scipy.spatial.distance import euclidean
 import rawpy
+import csv
 
 
 # Set appearance mode and color theme
@@ -1963,6 +1964,88 @@ class ModernVarroaDetectorGUI:
             print(f"Error saving YOLO labels: {str(e)}")
             raise
 
+    def get_image_statistics(self, image_name):
+        """Get statistics for a specific image"""
+        # Get image count
+        image_count = 0
+        subfolder_count = 0
+        total_count = 0
+
+        # Get the subfolder of this image
+        current_folder = os.path.dirname(image_name)
+
+        try:
+            # Get all images
+            all_images = []
+            for root, _, files in os.walk(self.output_path):
+                if "predict 0.1" in root:  # Skip predict directory
+                    continue
+                for f in files:
+                    if f.lower().endswith('.jpg'):
+                        rel_path = os.path.relpath(os.path.join(root, f), self.output_path)
+                        all_images.append(rel_path)
+
+            # Store current state to restore later
+            temp_current = self.current_image
+            temp_boxes = self.image_viewer.all_boxes
+
+            # Get image count
+            if image_name in self.current_boxes:
+                threshold = self.image_confidence_thresholds.get(image_name, 0.1)
+                boxes = self.current_boxes[image_name]
+
+                if image_name in self.image_viewer.roi_polygons:
+                    self.current_image = image_name
+                    self.image_viewer.all_boxes = boxes
+                    roi_boxes = self.image_viewer.get_boxes_in_roi(threshold=threshold)
+                    image_count = len(roi_boxes)
+                else:
+                    image_count = sum(1 for box in boxes if box[4] >= threshold)
+
+            # Get subfolder count
+            for img in all_images:
+                if os.path.dirname(img) == current_folder:
+                    if img not in self.current_boxes:
+                        self.load_boxes_for_image(img)
+
+                    if img in self.current_boxes:
+                        threshold = self.image_confidence_thresholds.get(img, 0.1)
+                        boxes = self.current_boxes[img]
+
+                        if img in self.image_viewer.roi_polygons:
+                            self.current_image = img
+                            self.image_viewer.all_boxes = boxes
+                            roi_boxes = self.image_viewer.get_boxes_in_roi(threshold=threshold)
+                            subfolder_count += len(roi_boxes)
+                        else:
+                            subfolder_count += sum(1 for box in boxes if box[4] >= threshold)
+
+            # Get total count
+            for img in all_images:
+                if img not in self.current_boxes:
+                    self.load_boxes_for_image(img)
+
+                if img in self.current_boxes:
+                    threshold = self.image_confidence_thresholds.get(img, 0.1)
+                    boxes = self.current_boxes[img]
+
+                    if img in self.image_viewer.roi_polygons:
+                        self.current_image = img
+                        self.image_viewer.all_boxes = boxes
+                        roi_boxes = self.image_viewer.get_boxes_in_roi(threshold=threshold)
+                        total_count += len(roi_boxes)
+                    else:
+                        total_count += sum(1 for box in boxes if box[4] >= threshold)
+
+            # Restore original state
+            self.current_image = temp_current
+            self.image_viewer.all_boxes = temp_boxes
+
+        except Exception as e:
+            print(f"Error getting statistics for {image_name}: {str(e)}")
+
+        return image_count, subfolder_count, total_count
+
     def save_results(self):
         """Save all images and labels with current thresholds and ROIs"""
         try:
@@ -1996,6 +2079,9 @@ class ModernVarroaDetectorGUI:
 
             # Update initial progress
             self.update_progress(0, "Starting to save results...")
+
+            # Prepare CSV data
+            csv_data = []
 
             for image_name in all_images:
                 # Calculate and update progress
@@ -2038,8 +2124,32 @@ class ModernVarroaDetectorGUI:
                 output_label_path = os.path.join(labels_dir, os.path.splitext(image_name)[0] + '.txt')
                 self.save_yolo_labels(image_path, final_boxes, output_label_path)
 
+                # Get statistics for this image
+                image_count, subfolder_count, total_count = self.get_image_statistics(image_name)
+
+                # Add to CSV data
+                # Get threshold for this image
+                threshold = self.image_confidence_thresholds.get(image_name, 0.1)
+
+                csv_data.append({
+                    'filename': image_name,
+                    'threshold': f"{threshold:.2f}",
+                    'varroa_count': image_count,
+                    'subfolder_count': subfolder_count,
+                    'total_count': total_count
+                })
+
                 processed += 1
                 self.root.update()
+
+            # Save CSV file
+            csv_path = os.path.join(results_dir, 'statistics.csv')
+            with open(csv_path, 'w', newline='') as csvfile:
+                fieldnames = ['filename', 'threshold', 'varroa_count', 'subfolder_count', 'total_count']
+                writer = csv.DictWriter(csvfile, fieldnames=fieldnames, delimiter=';')
+
+                writer.writeheader()
+                writer.writerows(csv_data)
 
             # Restore original current image and scale
             self.current_image = temp_current
@@ -2054,7 +2164,7 @@ class ModernVarroaDetectorGUI:
 
             # Update final progress
             self.update_progress(1.0, "Results saved successfully!")
-            messagebox.showinfo("Success", f"Results saved to {results_dir}")
+            messagebox.showinfo("Success", f"Results saved to {results_dir}\nStatistics saved to statistics.csv")
 
         except Exception as e:
             print(f"Error saving results: {str(e)}")
