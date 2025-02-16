@@ -2080,16 +2080,33 @@ class ModernVarroaDetectorGUI:
             # Update initial progress
             self.update_progress(0, "Starting to save results...")
 
-            # Prepare CSV data
+            # Prepare CSV data for individual images
             csv_data = []
+
+            # Prepare data structure for subfolder statistics
+            subfolder_stats = {}
 
             for image_name in all_images:
                 # Calculate and update progress
                 progress = processed / total_files
                 self.update_progress(progress, f"Saving results: {image_name} ({processed}/{total_files})")
 
+                # Get subfolder name
+                subfolder = os.path.dirname(image_name) if os.path.dirname(image_name) else "root"
+
+                # Initialize subfolder stats if not exists
+                if subfolder not in subfolder_stats:
+                    subfolder_stats[subfolder] = {
+                        'folder_name': subfolder,
+                        'num_varroa_mites_folder': 0,
+                        'thresholds': set(),
+                        'num_images': 0,
+                        'name_images': []
+                    }
+
                 # Get image-specific threshold
                 threshold = self.image_confidence_thresholds.get(image_name, 0.1)
+                subfolder_stats[subfolder]['thresholds'].add(threshold)
 
                 # Load boxes if not already loaded
                 if image_name not in self.current_boxes:
@@ -2108,6 +2125,11 @@ class ModernVarroaDetectorGUI:
                     final_boxes = self.image_viewer.get_boxes_in_roi()
                 else:
                     final_boxes = threshold_boxes
+
+                # Update subfolder statistics
+                subfolder_stats[subfolder]['num_varroa_mites_folder'] += len(final_boxes)
+                subfolder_stats[subfolder]['num_images'] += 1
+                subfolder_stats[subfolder]['name_images'].append(os.path.basename(image_name))
 
                 # Create subdirectory structure in output if needed
                 subdir = os.path.dirname(image_name)
@@ -2128,9 +2150,6 @@ class ModernVarroaDetectorGUI:
                 image_count, subfolder_count, total_count = self.get_image_statistics(image_name)
 
                 # Add to CSV data
-                # Get threshold for this image
-                threshold = self.image_confidence_thresholds.get(image_name, 0.1)
-
                 csv_data.append({
                     'filename': image_name,
                     'threshold': f"{threshold:.2f}",
@@ -2142,14 +2161,37 @@ class ModernVarroaDetectorGUI:
                 processed += 1
                 self.root.update()
 
-            # Save CSV file
+            # Save main statistics CSV file
             csv_path = os.path.join(results_dir, 'statistics.csv')
             with open(csv_path, 'w', newline='') as csvfile:
                 fieldnames = ['filename', 'threshold', 'varroa_count', 'subfolder_count', 'total_count']
                 writer = csv.DictWriter(csvfile, fieldnames=fieldnames, delimiter=';')
-
                 writer.writeheader()
                 writer.writerows(csv_data)
+
+            # Save subfolder statistics CSV
+            subfolder_csv_path = os.path.join(results_dir, 'statistics_subfolders.csv')
+            with open(subfolder_csv_path, 'w', newline='') as csvfile:
+                fieldnames = ['folder_name', 'num_varroa_mites_folder', 'threshold', 'num_images', 'name_images']
+                writer = csv.DictWriter(csvfile, fieldnames=fieldnames, delimiter=';')
+                writer.writeheader()
+
+                # Process and write each subfolder's data
+                for stats in subfolder_stats.values():
+                    # Convert thresholds set to appropriate format
+                    thresholds = list(stats['thresholds'])
+                    threshold_str = f"{thresholds[0]:.2f}" if len(thresholds) == 1 else str(
+                        [f"{t:.2f}" for t in thresholds])
+
+                    # Prepare row
+                    row = {
+                        'folder_name': stats['folder_name'],
+                        'num_varroa_mites_folder': stats['num_varroa_mites_folder'],
+                        'threshold': threshold_str,
+                        'num_images': stats['num_images'],
+                        'name_images': ', '.join(stats['name_images'])
+                    }
+                    writer.writerow(row)
 
             # Restore original current image and scale
             self.current_image = temp_current
@@ -2164,7 +2206,11 @@ class ModernVarroaDetectorGUI:
 
             # Update final progress
             self.update_progress(1.0, "Results saved successfully!")
-            messagebox.showinfo("Success", f"Results saved to {results_dir}\nStatistics saved to statistics.csv")
+            messagebox.showinfo("Success",
+                                f"Results saved to {results_dir}\n"
+                                f"Statistics saved to:\n"
+                                f"- statistics.csv\n"
+                                f"- statistics_subfolders.csv")
 
         except Exception as e:
             print(f"Error saving results: {str(e)}")
