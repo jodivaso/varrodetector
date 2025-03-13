@@ -85,17 +85,17 @@ def load_image_safely(image_path):
     # Convert to PIL Image
     return Image.fromarray(img_rgb)
 
-class RedirectText:
-    def __init__(self, text_widget):
-        self.text_widget = text_widget
-
-    def write(self, string):
-        self.text_widget.insert(tk.END, string)
-        self.text_widget.see(tk.END)
-        self.text_widget.update_idletasks()
-
-    def flush(self):
-        pass
+# class RedirectText:
+#     def __init__(self, text_widget):
+#         self.text_widget = text_widget
+#
+#     def write(self, string):
+#         self.text_widget.insert(tk.END, string)
+#         self.text_widget.see(tk.END)
+#         self.text_widget.update_idletasks()
+#
+#     def flush(self):
+#         pass
 
 
 def get_resource_path(relative_path):
@@ -315,6 +315,24 @@ def crop_green_lines(initial_img_path):
 
 
 class ModernTiledImageViewer(ctk.CTkFrame):
+
+    def initialize_canvas(self):
+        """Initialize the canvas with a message prompting to select an input folder"""
+        # Clear the canvas
+        self.canvas.delete("all")
+
+        # Display a message prompting the user to select an input folder
+        self.canvas.create_text(
+            self.canvas.winfo_width() // 2,
+            self.canvas.winfo_height() // 2,
+            text="Please select an input folder",
+            font=("Inter", 14),
+            fill="#888888"
+        )
+
+        # Make sure the canvas is visible
+        self.update_idletasks()
+
     def __init__(self, parent, GUI):
         super().__init__(parent)
         self.parent= parent
@@ -380,13 +398,19 @@ class ModernTiledImageViewer(ctk.CTkFrame):
         self.root.bind("<KeyRelease>", self.on_key_release)
 
         # Create loading label
-        self.loading_label = ctk.CTkLabel(self, text="Loading image...")
+        #self.loading_label = ctk.CTkLabel(self, text="Loading image...")
 
         # Create thread pool
         self.executor = ThreadPoolExecutor(max_workers=4)
 
         # Bind events
         self._bind_events()
+
+        # Add a binding for canvas resize to update the welcome message position
+        self.canvas.bind("<Configure>", self.on_canvas_configure)
+
+        # Initialize the canvas with welcome message
+        self.root.after(100, self.initialize_canvas)  # Slight delay to ensure window is properly sized
 
     def init_roi_variables(self):
         self.roi_points = []  # Store points for current ROI being drawn
@@ -697,6 +721,10 @@ class ModernTiledImageViewer(ctk.CTkFrame):
 
     def on_button_press(self, event):
         """Handle mouse button press for all interactions"""
+        # Check if an image is loaded before allowing any drawing
+        if not self.original_image:
+            return
+
         canvas_x = self.canvas.canvasx(event.x)
         canvas_y = self.canvas.canvasy(event.y)
 
@@ -720,6 +748,11 @@ class ModernTiledImageViewer(ctk.CTkFrame):
 
     def on_drag(self, event):
         """Handle all dragging operations"""
+
+        # Check if an image is loaded before allowing any drawing
+        if not self.original_image:
+            return
+
         canvas_x = self.canvas.canvasx(event.x)
         canvas_y = self.canvas.canvasy(event.y)
 
@@ -775,6 +808,10 @@ class ModernTiledImageViewer(ctk.CTkFrame):
 
     def on_button_release(self, event):
         """Handle mouse button release for all interactions"""
+        # Check if an image is loaded before allowing any drawing
+        if not self.original_image:
+            return
+
         if self.is_drawing_new and self.drag_start:
             # Finish drawing new box
             canvas_x = self.canvas.canvasx(event.x)
@@ -808,6 +845,11 @@ class ModernTiledImageViewer(ctk.CTkFrame):
         self.draw_all_boxes()
 
     def delete_box(self, event):
+
+        # Check if an image is loaded before allowing any deletion
+        if not self.original_image:
+            return
+
         """Delete box on right click"""
         canvas_x = self.canvas.canvasx(event.x)
         canvas_y = self.canvas.canvasy(event.y)
@@ -860,8 +902,10 @@ class ModernTiledImageViewer(ctk.CTkFrame):
 
     def load_image(self, image_path, boxes=None):
         """Load image and store all detection boxes"""
-        self.loading_label.place(relx=0.5, rely=0.5, anchor='center')
-        self.loading_label.lift()
+        if hasattr(self.GUI, 'image_viewer'):
+            self.GUI.image_viewer.update_canvas_message("Loading image")
+        # self.loading_label.place(relx=0.5, rely=0.5, anchor='center')
+        # self.loading_label.lift()
         self.update()
 
         try:
@@ -892,7 +936,7 @@ class ModernTiledImageViewer(ctk.CTkFrame):
             self.draw_all_boxes()
 
         except Exception as e:
-            self.loading_label.place_forget()
+            #self.loading_label.place_forget()
             print(f"Error loading image: {str(e)}")
             messagebox.showerror("Error", f"Could not load image: {str(e)}")
 
@@ -947,7 +991,7 @@ class ModernTiledImageViewer(ctk.CTkFrame):
                 tile_key = self.get_tile_key(row, col, self.scale)
                 self.tile_cache[tile_key] = ImageTk.PhotoImage(tile)
         # Hide loading label and draw tiles
-        self.loading_label.place_forget()
+        #self.loading_label.place_forget()
         self.draw_visible_tiles()
         self.draw_all_boxes()
         # Center the image
@@ -1157,7 +1201,47 @@ class ModernTiledImageViewer(ctk.CTkFrame):
 
     def on_canvas_configure(self, event):
         """Handle canvas resize"""
-        self.draw_visible_tiles()
+        if self.original_image:
+            # If an image is loaded, draw the tiles
+            self.draw_visible_tiles()
+        else:
+            # If no image is loaded, show appropriate message based on application state
+            self.canvas.delete("all")
+
+            # Check if folder has been selected (GUI has output_path)
+            if hasattr(self.GUI, 'output_path') and self.GUI.output_path:
+                message = "Select an image to begin"
+            else:
+                message = "Please select an input folder"
+
+            self.canvas.create_text(
+                event.width // 2,
+                event.height // 2,
+                text=message,
+                font=("Inter", 14),
+                fill="#888888"
+            )
+
+    def update_canvas_message(self, message):
+        """Update the canvas message"""
+        self.canvas.delete("all")
+
+        # Reset scrollregion to ensure message is centered in the visible area
+        self.canvas.configure(scrollregion=(0, 0, self.canvas.winfo_width(), self.canvas.winfo_height()))
+
+        self.canvas.create_text(
+            self.canvas.winfo_width() // 2,
+            self.canvas.winfo_height() // 2,
+            text=message,
+            font=("Inter", 14),
+            fill="#888888"
+        )
+
+        # Reset scroll position to ensure message is visible
+        self.canvas.xview_moveto(0)
+        self.canvas.yview_moveto(0)
+        # Ensure the canvas is updated immediately
+        self.canvas.update_idletasks()
 
     def start_box(self, event):
         """Start drawing a bounding box"""
@@ -1251,7 +1335,7 @@ class ModernVarroaDetectorGUI:
             fg_color=COLORS['surface'],
             corner_radius=15
         )
-        self.main_container.pack(fill="both", expand=True, padx=20, pady=20)
+        self.main_container.pack(fill="both", expand=True, padx=0, pady=0)
 
         # Create sidebar with enhanced styling
         self.sidebar = ctk.CTkFrame(
@@ -1260,7 +1344,7 @@ class ModernVarroaDetectorGUI:
             fg_color=COLORS['surface'],
             corner_radius=10
         )
-        self.sidebar.pack(side="left", fill="y", padx=(0, 20), pady=10)
+        self.sidebar.pack(side="left", fill="y", padx=(0, 0), pady=0)
         # Prevent the sidebar from expanding
         self.sidebar.pack_propagate(False)
 
@@ -1306,7 +1390,7 @@ class ModernVarroaDetectorGUI:
             self.sidebar,
             text="Select Input Folder",
             command=self.run_task_in_thread,
-            height=45,
+            height=35,
             #font=self.default_font,
             font=("Inter", 13, "bold"),
             fg_color=COLORS['primary'],
@@ -1320,7 +1404,7 @@ class ModernVarroaDetectorGUI:
             self.sidebar,
             text="Save Results",
             command=self.save_results,
-            height=45,
+            height=35,
             font=("Inter", 13, "bold"),
             fg_color=COLORS['success'],  # Using success color for save button
             hover_color=COLORS['primary'],
@@ -1335,7 +1419,7 @@ class ModernVarroaDetectorGUI:
             self.sidebar,
             text="Help",
             command=self.show_help,
-            height=45,
+            height=35,
             font=("Inter", 13, "bold"),
             fg_color=COLORS['secondary'],  # Using secondary color for help button
             hover_color=COLORS['accent'],
@@ -1488,8 +1572,8 @@ class ModernVarroaDetectorGUI:
         self.text_output.pack(fill="x")
 
         # Redirect stdout
-        self.redirector = RedirectText(self.text_output)
-        sys.stdout = self.redirector
+        # self.redirector = RedirectText(self.text_output)
+        # sys.stdout = self.redirector
 
         # Image viewer with improved styling
         self.image_viewer = ModernTiledImageViewer(
@@ -2316,6 +2400,9 @@ class ModernVarroaDetectorGUI:
             self.current_folder = os.path.join(self.current_folder, "")
             self.output_path = os.path.join(self.current_folder, "processed_images")
 
+            if hasattr(self, 'image_viewer'):
+                self.image_viewer.update_canvas_message("Analysis in progress, please wait")
+
             # Process images
             self.process_images()
 
@@ -2514,6 +2601,9 @@ class ModernVarroaDetectorGUI:
             # Enable both save and apply-to-all buttons after successful analysis
             self.save_button.configure(state="normal")
             self.apply_all_button.configure(state="normal")
+
+            if hasattr(self, 'image_viewer'):
+                self.image_viewer.update_canvas_message("Select an image to begin")
 
         except Exception as e:
             print(f"Error in detection: {str(e)}")
