@@ -391,6 +391,7 @@ class ModernTiledImageViewer(ctk.CTkFrame):
         self.hide_key_pressed = False
         self.edge_sensitivity = 5
         self.is_drawing_new = False
+        self.hover_confidence_label = None
 
         # Bind keyboard events to root window
         self.root = self.winfo_toplevel()
@@ -410,7 +411,7 @@ class ModernTiledImageViewer(ctk.CTkFrame):
         self.canvas.bind("<Configure>", self.on_canvas_configure)
 
         # Initialize the canvas with welcome message
-        self.root.after(100, self.initialize_canvas)  # Slight delay to ensure window is properly sized
+        self.root.after(50, self.initialize_canvas)  # Slight delay to ensure window is properly sized
 
     def init_roi_variables(self):
         self.roi_points = []  # Store points for current ROI being drawn
@@ -688,7 +689,7 @@ class ModernTiledImageViewer(ctk.CTkFrame):
             self.canvas.configure(cursor="arrow")
 
     def on_mouse_move(self, event):
-        """Handle mouse movement for hover effects and cursor updates"""
+        """Handle mouse movement for hover effects, cursor updates, and confidence display"""
         if self.is_drawing_new:  # If drawing a new box, don't change cursor
             return
 
@@ -700,10 +701,47 @@ class ModernTiledImageViewer(ctk.CTkFrame):
         # Update cursor
         self.update_cursor(hit_area, edge_type)
 
+        # Remove any existing confidence label
+        if self.hover_confidence_label:
+            if isinstance(self.hover_confidence_label, list):
+                for item in self.hover_confidence_label:
+                    self.canvas.delete(item)
+            else:
+                self.canvas.delete(self.hover_confidence_label)
+            self.hover_confidence_label = None
+
         # Update hover effect
         if box != self.hover_box:
             self.hover_box = box
             self.draw_all_boxes()
+
+        # Create new confidence label if hovering over a box
+        if box:
+            confidence = box[4]  # Get confidence value (5th element of box)
+            confidence_text = f"Confidence: {confidence:.2f}"
+
+            # Position for the label (above the box)
+            label_x = (box[0] + box[2]) * self.scale / 2  # Center of box
+            label_y = box[1] * self.scale - 10  # Slightly above the box
+
+            # Create a background rectangle for better visibility
+            text_bg = self.canvas.create_rectangle(
+                label_x - 70, label_y - 15,
+                label_x + 70, label_y + 5,
+                fill="white", outline="black", tags="confidence_label"
+            )
+
+            # Create the text label
+            text_label = self.canvas.create_text(
+                label_x, label_y - 5,
+                text=confidence_text,
+                fill="black",
+                font=("Arial", 10),
+                tags="confidence_label"
+            )
+
+            # Store both as the hover confidence label
+            self.hover_confidence_label = [text_bg, text_label]
 
     def on_key_press(self, event):
         """Handle key press events"""
@@ -1717,93 +1755,6 @@ class ModernVarroaDetectorGUI:
         )
         self.total_boxes_label.pack(anchor="w")
 
-    # def update_box_statistics(self):
-    #     """Update the box count statistics considering ROI if present"""
-    #     # Count boxes in current image
-    #     current_count = 0
-    #     subfolder_count = 0
-    #
-    #     if self.current_image:
-    #         current_threshold = self.image_confidence_thresholds.get(self.current_image, 0.1)
-    #         boxes = self.image_viewer.get_boxes_in_roi(threshold=current_threshold)
-    #         current_count = len(boxes)
-    #
-    #         # Get current subfolder
-    #         current_folder = os.path.dirname(self.current_image)
-    #
-    #         # Find all images in the same subfolder
-    #         subfolder_images = []
-    #         for root, _, files in os.walk(self.output_path):
-    #             for f in files:
-    #                 if f.lower().endswith('.jpg'):
-    #                     # Get relative path
-    #                     rel_path = os.path.relpath(os.path.join(root, f), self.output_path)
-    #                     if os.path.dirname(rel_path) == current_folder:
-    #                         subfolder_images.append(rel_path)
-    #
-    #         # Count boxes in all images from the same subfolder
-    #         for image_name in subfolder_images:
-    #             # Load boxes if not already loaded
-    #             if image_name not in self.current_boxes:
-    #                 self.load_boxes_for_image(image_name)
-    #
-    #             if image_name in self.current_boxes:
-    #                 threshold = self.image_confidence_thresholds.get(image_name, 0.1)
-    #                 boxes = self.current_boxes[image_name]
-    #
-    #                 if image_name in self.image_viewer.roi_polygons:
-    #                     # Temporarily set up image viewer state to check ROI
-    #                     temp_current = self.current_image
-    #                     temp_boxes = self.image_viewer.all_boxes
-    #
-    #                     self.current_image = image_name
-    #                     self.image_viewer.all_boxes = boxes
-    #
-    #                     roi_boxes = self.image_viewer.get_boxes_in_roi(threshold=threshold)
-    #                     subfolder_count += len(roi_boxes)
-    #
-    #                     # Restore original state
-    #                     self.current_image = temp_current
-    #                     self.image_viewer.all_boxes = temp_boxes
-    #                 else:
-    #                     subfolder_count += sum(1 for box in boxes if box[4] >= threshold)
-    #
-    #     # Count total boxes across all images
-    #     total_count = 0
-    #     for image_name, boxes in self.current_boxes.items():
-    #         threshold = self.image_confidence_thresholds.get(image_name, 0.1)
-    #
-    #         if image_name in self.image_viewer.roi_polygons:
-    #             temp_current = self.current_image
-    #             temp_boxes = self.image_viewer.all_boxes
-    #
-    #             self.current_image = image_name
-    #             self.image_viewer.all_boxes = boxes
-    #
-    #             roi_boxes = self.image_viewer.get_boxes_in_roi(threshold=threshold)
-    #             total_count += len(roi_boxes)
-    #
-    #             self.current_image = temp_current
-    #             self.image_viewer.all_boxes = temp_boxes
-    #         else:
-    #             total_count += sum(1 for box in boxes if box[4] >= threshold)
-    #
-    #     # Update labels
-    #     roi_text = " (in ROI)" if self.current_image in self.image_viewer.roi_polygons else ""
-    #     current_folder_text = f" ({os.path.dirname(self.current_image)})" if self.current_image and os.path.dirname(
-    #         self.current_image) else ""
-    #
-    #     self.current_boxes_label.configure(text=f"Current Image{roi_text}: {current_count} varroa mites")
-    #     self.subfolder_boxes_label.configure(
-    #         text=f"Current Subfolder{current_folder_text}: {subfolder_count} varroa mites")
-    #     self.total_boxes_label.configure(text=f"Total (in ROIs or full images): {total_count} varroa mites")
-    #
-    #     # Update display
-    #     if self.current_image:
-    #         self.image_viewer.draw_all_boxes()
-    #         if self.current_image in self.image_viewer.roi_polygons:
-    #             self.image_viewer.draw_roi()
-
     def update_box_statistics(self):
         """Update the box count statistics considering ROI if present"""
         # Initialize counts
@@ -2641,7 +2592,7 @@ class ModernVarroaDetectorGUI:
                 self.image_listbox.fullnames[display_name] = file
 
             # Add extra visual spacing
-            self.image_listbox.insert(tk.END, "")
+            # self.image_listbox.insert(tk.END, "")
 
     def highlight_same_folder_images(self):
         if not self.current_image:
@@ -2673,6 +2624,10 @@ class ModernVarroaDetectorGUI:
         # Get the original filename from our stored dictionary
         selected = self.image_listbox.fullnames.get(selected_display.strip(), selected_display.strip())
 
+        # Check if the same image is already loaded - if so, do nothing
+        if self.current_image == selected:
+            return
+        
         try:
             # Update current image
             self.current_image = selected
