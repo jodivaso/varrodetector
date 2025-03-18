@@ -91,3 +91,6 @@ When you click "Save Results", a new folder named "results" will be created in y
 ## Acknowledgments
 
 - Funded by grant INICIA2023/02 by La Rioja Government (Spain).
+
+## License
+This software uses a YOLOv11 nano model; thus, it is licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
