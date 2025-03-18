@@ -25,7 +25,7 @@ The detection process is based on a YOLOv11 nano model specifically trained on h
 ### Execution Options
 
 #### Option 1: Executable File (Recommended)
-1. Download the latest `VarroDetector.exe` file from the [Releases](https://github.com/jodivaso/VarroDetector/releases) page, according to your platform.
+1. Download the latest `VarroDetector` executable file from the [Releases](https://github.com/jodivaso/VarroDetector/releases) page, according to your platform.
 2. Run the executable file
 
 #### Option 2: Run from Source
