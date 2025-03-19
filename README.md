@@ -44,6 +44,11 @@ pip install -r requirements.txt
 python varroa_mite_gui.py
 ```
 
+### User's manual
+
+The program is very easy to used; nevertheless, you can [click here](https://unirioja-my.sharepoint.com/:b:/g/personal/jodivaso_unirioja_es/EcD0rAZJ49pHrSW40yprr2sBtFBxz5tAsLZVexBZqLI4cA?e=tb5JJv) 
+to download the user's manual in PDF.
+
 ### Controls
 
 - **Zoom**: Mouse wheel
