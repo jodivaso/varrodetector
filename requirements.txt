@@ -1,0 +1,7 @@
+customtkinter>=5.2.0
+pillow>=9.5.0
+opencv-python>=4.7.0
+numpy>=1.24.0
+ultralytics>=8.0.0
+scipy>=1.10.0
+rawpy>=0.18.0
