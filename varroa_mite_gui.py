@@ -2661,11 +2661,13 @@ class ModernVarroaDetectorGUI:
             print(f"Error loading image: {str(e)}")
             messagebox.showerror("Error", f"Error loading image: {str(e)}")
 
+
+
     def show_help(self):
         """Show help dialog with information about the program"""
         help_window = ctk.CTkToplevel(self.root)
         help_window.title("VarroDetector - Help")
-        help_window.geometry("750x600")
+        help_window.geometry("650x400")
 
         # Make the window modal
         help_window.transient(self.root)
@@ -2679,71 +2681,409 @@ class ModernVarroaDetectorGUI:
         y = (help_window.winfo_screenheight() // 2) - (height // 2)
         help_window.geometry(f'{width}x{height}+{x}+{y}')
 
-        # Create a scrollable frame
-        scroll_frame = ctk.CTkScrollableFrame(
-            help_window,
-            fg_color=COLORS['surface']
+        # Create tabview for better organization
+        tabview = ctk.CTkTabview(help_window, fg_color=COLORS['surface'])
+        tabview.pack(fill="both", expand=True, padx=20, pady=20)
+
+        # Create tabs
+        overview_tab = tabview.add("Overview")
+        controls_tab = tabview.add("Controls")
+        roi_tab = tabview.add("ROI")
+        workflow_tab = tabview.add("Workflow")
+        about_tab = tabview.add("About")
+
+        # Set the default tab
+        tabview.set("Overview")
+
+        # Helper function to create section headers
+        def create_header(parent, text):
+            header = ctk.CTkLabel(
+                parent,
+                text=text,
+                font=("Inter", 18, "bold"),
+                text_color=COLORS['primary']
+            )
+            header.pack(anchor="w", pady=(10, 5), padx=10)
+            return header
+
+        # Helper function to create content text
+        def create_content(parent, text, padx=15, pady=(0, 10)):
+            content = ctk.CTkLabel(
+                parent,
+                text=text,
+                font=self.default_font,
+                text_color=COLORS['text'],
+                justify="left",
+                wraplength=700
+            )
+            content.pack(anchor="w", pady=pady, padx=padx)
+            return content
+
+        # Helper function to create bullet points
+        def create_bullet_list(parent, items, padx=30, bullet_type="•"):
+            for item in items:
+                frame = ctk.CTkFrame(parent, fg_color="transparent")
+                frame.pack(fill="x", pady=(0, 5), padx=padx)
+
+                # Bullet point
+                bullet = ctk.CTkLabel(
+                    frame,
+                    text=bullet_type,
+                    font=self.default_font,
+                    text_color=COLORS['primary'],
+                    width=20
+                )
+                bullet.pack(side="left", anchor="n")
+
+                # Text content
+                content = ctk.CTkLabel(
+                    frame,
+                    text=item,
+                    font=self.default_font,
+                    text_color=COLORS['text'],
+                    justify="left",
+                    anchor="w",
+                    wraplength=650
+                )
+                content.pack(side="left", fill="x", expand=True, anchor="w")
+
+        # Helper function to create key-control pairs
+        def create_key_control(parent, key, description):
+            frame = ctk.CTkFrame(parent, fg_color="transparent")
+            frame.pack(fill="x", pady=(0, 5), padx=20)
+
+            # Key in a badge-like appearance
+            key_label = ctk.CTkLabel(
+                frame,
+                text=key,
+                font=("Inter", 12, "bold"),
+                text_color="white",
+                fg_color=COLORS['primary'],
+                corner_radius=5,
+                width=120
+            )
+            key_label.pack(side="left", padx=(0, 10))
+
+            # Description
+            desc_label = ctk.CTkLabel(
+                frame,
+                text=description,
+                font=self.default_font,
+                text_color=COLORS['text'],
+                justify="left"
+            )
+            desc_label.pack(side="left", fill="x", expand=True)
+
+        # OVERVIEW TAB
+        overview_frame = ctk.CTkScrollableFrame(overview_tab, fg_color="transparent")
+        overview_frame.pack(fill="both", expand=True)
+
+        # Title
+        title = ctk.CTkLabel(
+            overview_frame,
+            text="VarroDetector - Quick Guide",
+            font=("Inter", 24, "bold"),
+            text_color=COLORS['primary']
         )
-        scroll_frame.pack(fill="both", expand=True, padx=20, pady=20)
+        title.pack(pady=(10, 15))
 
-        # Help content
-        help_text = """
-        VarroDetector - Quick Guide
-        
-        This software provides a simple way to count varroa mites from an image captured by a smartphone. 
-        It runs under low hardware-constraints (no GPU is needed).
-        
-        How to use:
-        1. Click "Select Input Folder" and choose a folder with your images
-        2. Wait for the processing to complete
-        3. Click on any image in the list to view it
-        4. Use the confidence slider to adjust detection sensitivity
-        5. Click "Save Results" when you're done
+        # Description
+        description_text = "This software provides a simple way to count varroa mites from an image captured by a smartphone. It runs under low hardware-constraints (no GPU is needed)."
+        create_content(overview_frame, description_text)
 
-        Controls:
-        - Zoom: Mouse wheel
-        - Pan: Middle mouse button
-        - Add varroa mite: Left click and drag
-        - Delete varroa mite: Right click on box
-        - Press (and keep pressing) the key h to temporarily hide the detections. 
-        - Once the key h is released, the detections will be shown again
-        
-        Region of Interest (ROI):
-        - Click the "Edit ROI" button to define a specific area for counting varroa mites
-        - Left click to add points and create your ROI polygon
-        - Double click to complete the ROI
-        - Right click to delete the current ROI
-        - The statistics will update to show mite counts only within the ROI
-        - ROIs are saved per image and will be included in the final results
-                
-        
-        The analysis will be also performed to any image contained in subfolders of the input folder. The confidence
-        score can be set up individually for each image. Lower confidence score will show more detections, but 
-        possibly with more false positives. The "Apply Threshold to All Images" button allows the user to quickly 
-        set the same confidence threshold across all the images. The Save Button will save the images (with the 
-        printed detections) and the coordinates of the detections (the labels) in a folder named  "results" within 
-        the input folder.
-        
-        This software is completely free. If you wish to collaborate (for instance, providing new images with 
-        corrected detections to improve the underlying AI model), please contact:
-        - Jose Divasón (jose.divason@unirioja.es)
-        - Jesús Yániz (jyaniz@unizar.es)
+        # How to use
+        create_header(overview_frame, "How to use")
 
-        """
-        # Add the help text
-        help_label = ctk.CTkLabel(
-            scroll_frame,
-            text=help_text,
+        # Create a manual numbered list instead of using the bullet_list function
+        how_to_use = [
+            "Click \"Select Input Folder\" and choose a folder with your images",
+            "Wait for the processing to complete",
+            "Click on any image in the list to view it",
+            "Use the confidence slider to adjust detection sensitivity",
+            "Click \"Save Results\" when you're done"
+        ]
+
+        for i, item in enumerate(how_to_use, 1):
+            frame = ctk.CTkFrame(overview_frame, fg_color="transparent")
+            frame.pack(fill="x", pady=(0, 5), padx=30)
+
+            # Numbered bullet point
+            bullet = ctk.CTkLabel(
+                frame,
+                text=f"{i}.",
+                font=self.default_font,
+                text_color=COLORS['primary'],
+                width=20
+            )
+            bullet.pack(side="left", anchor="n")
+
+            # Text content
+            content = ctk.CTkLabel(
+                frame,
+                text=item,
+                font=self.default_font,
+                text_color=COLORS['text'],
+                justify="left",
+                anchor="w",
+                wraplength=650
+            )
+            content.pack(side="left", fill="x", expand=True, anchor="w")
+
+        # CONTROLS TAB
+        controls_frame = ctk.CTkScrollableFrame(controls_tab, fg_color="transparent")
+        controls_frame.pack(fill="both", expand=True)
+
+        create_header(controls_frame, "Controls")
+
+        controls = [
+            ("Mouse Wheel", "Zoom"),
+            ("Middle Mouse Button", "Pan"),
+            ("Left Click + Drag", "Add varroa mite"),
+            ("Right Click on Box", "Delete varroa mite"),
+            ("H Key (Hold)", "Temporarily hide the detections")
+        ]
+
+        for key, desc in controls:
+            create_key_control(controls_frame, key, desc)
+
+        # ROI TAB
+        roi_frame = ctk.CTkScrollableFrame(roi_tab, fg_color="transparent")
+        roi_frame.pack(fill="both", expand=True)
+
+        create_header(roi_frame, "Region of Interest (ROI)")
+
+        roi_info = [
+            "Click the \"Edit ROI\" button to define a specific area for counting varroa mites",
+            "Left click to add points and create your ROI polygon",
+            "Double click to complete the ROI",
+            "Right click to delete the current ROI",
+            "The statistics will update to show mite counts only within the ROI",
+            "ROIs are saved per image and will be included in the final results"
+        ]
+        create_bullet_list(roi_frame, roi_info)
+
+        # WORKFLOW TAB
+        workflow_frame = ctk.CTkScrollableFrame(workflow_tab, fg_color="transparent")
+        workflow_frame.pack(fill="both", expand=True)
+
+        create_header(workflow_frame, "Processing Information")
+
+        workflow_info = ("The analysis will be also performed to any image contained in subfolders of the input folder."                         
+                         "The confidence score can be set up individually for each image. Lower confidence score will show more detections, but possibly with more false positives.\n\n"
+                         "The \"Apply Threshold to All Images\" button allows the user to quickly set the same confidence threshold across all the images.\n\n"
+                         "The Save Button will save the images (with the printed detections) and the coordinates of the detections (the labels) in a folder named \"results\" within the input folder.")
+        create_content(workflow_frame, workflow_info)
+
+        # ABOUT TAB
+        about_frame = ctk.CTkScrollableFrame(about_tab, fg_color="transparent")
+        about_frame.pack(fill="both", expand=True)
+
+        create_header(about_frame, "About VarroDetector")
+
+        about_text = "This software is completely free. If you wish to collaborate (for instance, providing new images with corrected detections to improve the underlying AI model), please contact:"
+        create_content(about_frame, about_text)
+
+        # Create contact frame for each contact
+        contact_frame1 = ctk.CTkFrame(about_frame, fg_color="transparent")
+        contact_frame1.pack(fill="x", pady=(0, 5), padx=30)
+
+        bullet1 = ctk.CTkLabel(
+            contact_frame1,
+            text="•",
+            font=self.default_font,
+            text_color=COLORS['primary'],
+            width=20
+        )
+        bullet1.pack(side="left", anchor="n")
+
+        name1 = ctk.CTkLabel(
+            contact_frame1,
+            text="Jose Divasón (",
             font=self.default_font,
             text_color=COLORS['text'],
             justify="left",
-            wraplength=700
+            anchor="w"
         )
-        help_label.pack(padx=20, pady=20)
+        name1.pack(side="left")
+
+        email1 = ctk.CTkLabel(
+            contact_frame1,
+            text="jose.divason@unirioja.es",
+            font=("Inter", 13, "underline"),
+            text_color=COLORS['primary'],
+            justify="left",
+            cursor="hand2"
+        )
+        email1.pack(side="left")
+
+        closing1 = ctk.CTkLabel(
+            contact_frame1,
+            text=")",
+            font=self.default_font,
+            text_color=COLORS['text'],
+            justify="left"
+        )
+        closing1.pack(side="left")
+
+        # Contact 2
+        contact_frame2 = ctk.CTkFrame(about_frame, fg_color="transparent")
+        contact_frame2.pack(fill="x", pady=(0, 5), padx=30)
+
+        bullet2 = ctk.CTkLabel(
+            contact_frame2,
+            text="•",
+            font=self.default_font,
+            text_color=COLORS['primary'],
+            width=20
+        )
+        bullet2.pack(side="left", anchor="n")
+
+        name2 = ctk.CTkLabel(
+            contact_frame2,
+            text="Jesús Yániz (",
+            font=self.default_font,
+            text_color=COLORS['text'],
+            justify="left",
+            anchor="w"
+        )
+        name2.pack(side="left")
+
+        email2 = ctk.CTkLabel(
+            contact_frame2,
+            text="jyaniz@unizar.es",
+            font=("Inter", 13, "underline"),
+            text_color=COLORS['primary'],
+            justify="left",
+            cursor="hand2"
+        )
+        email2.pack(side="left")
+
+        closing2 = ctk.CTkLabel(
+            contact_frame2,
+            text=")",
+            font=self.default_font,
+            text_color=COLORS['text'],
+            justify="left"
+        )
+        closing2.pack(side="left")
+
+        # Make emails clickable
+        def open_email(email):
+            import webbrowser
+            webbrowser.open(f"mailto:{email}")
+
+        email1.bind("<Button-1>", lambda e: open_email("jose.divason@unirioja.es"))
+        email2.bind("<Button-1>", lambda e: open_email("jyaniz@unizar.es"))
+
+        # GitHub repository link
+        create_header(about_frame, "Source Code")
+
+        github_frame = ctk.CTkFrame(about_frame, fg_color="transparent")
+        github_frame.pack(fill="x", pady=(0, 10), padx=15)
+
+        github_label = ctk.CTkLabel(
+            github_frame,
+            text="GitHub Repository:",
+            font=self.default_font,
+            text_color=COLORS['text']
+        )
+        github_label.pack(side="left", padx=(0, 5))
+
+        github_link = ctk.CTkLabel(
+            github_frame,
+            text="https://github.com/jodivaso/VarroDetector",
+            font=("Inter", 13, "underline"),
+            text_color=COLORS['primary'],
+            cursor="hand2"
+        )
+        github_link.pack(side="left")
+
+        # Make the link clickable (opens in default browser)
+        def open_github(event):
+            import webbrowser
+            webbrowser.open("https://github.com/jodivaso/VarroDetector")
+
+        github_link.bind("<Button-1>", open_github)
+
+        create_header(about_frame, "Acknowledgments")
+        acknowledgments_text = "This research has been funded by:"
+        create_content(about_frame, acknowledgments_text)
+        funders = [
+            "Grant INICIA2023/02 by La Rioja Government (Spain)",
+            "MCIU/AEI/10.13039/501100011033 (grant PID2023-148475OB-I00)",
+            "The EU Horizon Europe (grant 101082073)",
+            "The DGA - FSE (grant A07_23R)"
+        ]
+        create_bullet_list(about_frame, funders)
+
+        create_header(about_frame, "License")
+        license_text = "This software uses a YOLOv11 nano model; thus, it is licensed under the GNU Affero General Public License v3.0 (AGPL-3.0)."
+        create_content(about_frame, license_text)
+
+        # Version info frame (visible in all tabs)
+        version_frame = ctk.CTkFrame(help_window, fg_color="transparent", height=5)
+        version_frame.pack(fill="x", pady=(0, 0), padx=20)
+
+        version_label = ctk.CTkLabel(
+            version_frame,
+            text="Version 0.0.1",
+            font=("Inter", 12),
+            text_color=COLORS['secondary']
+        )
+        version_label.pack(side="left")
 
         # Close button at the bottom
+        button_frame = ctk.CTkFrame(help_window, fg_color="transparent")
+        button_frame.pack(fill="x", pady=(5, 20), padx=20)
+
+        # University logos frame
+        logos_frame = ctk.CTkFrame(button_frame, fg_color="transparent")
+        logos_frame.pack(side="left", fill="y")
+
+        # Function to load and resize university logos
+        def load_university_logo(path, width=150, height=40):
+            try:
+                # Create CTkImage for the logo
+                if "beeguards" in path:
+                    width=74
+                    height=40
+                logo = ctk.CTkImage(
+                    light_image=Image.open(self.get_resource_path(path)),
+                    dark_image=Image.open(self.get_resource_path(path)),
+                    size=(width, height)
+                )
+                return logo
+            except Exception as e:
+                print(f"Could not load logo: {e}")
+                return None
+
+        #   # University information - logo paths and website URLs
+        universities = [
+            {"logo": "ur_logo.png", "url": "https://www.unirioja.es/"},
+            {"logo": "unizar_logo.png", "url": "https://www.unizar.es/"},
+            {"logo": "beeguards_logo.png", "url": "https://www.aragon.es/"}
+        ]
+
+        # Function to open website
+        def open_website(url):
+            import webbrowser
+            webbrowser.open(url)
+
+        # Create and place clickable logo labels
+        for uni in universities:
+            logo = load_university_logo(uni["logo"])
+            if logo:
+                logo_label = ctk.CTkLabel(
+                    logos_frame,
+                    image=logo,
+                    text="",  # No text, just the image
+                    cursor="hand2"  # Hand cursor to indicate clickability
+                )
+                logo_label.pack(side="left", padx=10)
+
+
         close_button = ctk.CTkButton(
-            help_window,
+            button_frame,
             text="Close",
             command=help_window.destroy,
             height=40,
@@ -2751,8 +3091,7 @@ class ModernVarroaDetectorGUI:
             fg_color=COLORS['primary'],
             hover_color=COLORS['accent']
         )
-        close_button.pack(pady=(0, 20))
-
+        close_button.pack(side="right")
 
 def main():
     app = ModernVarroaDetectorGUI()
@@ -2762,4 +3101,5 @@ def main():
 if __name__ == "__main__":
     main()
 
-# pyinstaller --onefile --noconsole --add-data "model/weights/best.pt;model/weights" --add-data "icon.ico;." --add-data "icon_for_sidebar.png;." --icon "icon.ico" --splash splash.PNG varroa_mite_gui.py --name=VarroDetector
+# pyinstaller --onefile --noconsole --add-data "model/weights/best.pt;model/weights" --add-data "icon.ico;." --add-data "icon_for_sidebar.png;." --add-data "ur_logo.png;." --add-data "unizar_logo.png;." --add-data "beeguards_logo.png;." --icon "icon.ico" --splash splash.PNG varroa_mite_gui.py --name=VarroDetector
+
