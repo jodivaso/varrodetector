@@ -104,4 +104,4 @@ This research has been funded by:
 ## License
 This software uses a YOLOv11 nano model; thus, it is licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
 
-
+<img src="ur_logo.png" alt="University of La Rioja" width="200"/>&nbsp;&nbsp;&nbsp;&nbsp;<img src="unizar_logo.png" alt="University of Zaragoza" width="200"/>&nbsp;&nbsp;&nbsp;&nbsp;<img src="beeguards_logo.png" alt="BeeGuards" width="120" />
