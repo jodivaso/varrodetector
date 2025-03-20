@@ -1,7 +1,7 @@
 # VarroDetector
 
 <p>VarroDetector is an open-source tool designed to identify and count Varroa mites in images of sticky sheets taken with smartphones.
-The software runs in low-range computers (no GPU is needed). Neither installation nor internet connection in needed, just double-click
+The software runs in low-range computers (no GPU is needed). Neither installation nor internet connection is needed, just double-click
 on the executable.</p>
 
 <p>The detection process is based on a YOLOv11 nano model specifically trained on hundreds of images to identify Varroa mites.</p>
@@ -46,8 +46,8 @@ python varroa_mite_gui.py
 
 ### User's manual
 
-The program is very easy to used; nevertheless, you can [click here](https://unirioja-my.sharepoint.com/:b:/g/personal/jodivaso_unirioja_es/EcD0rAZJ49pHrSW40yprr2sBtFBxz5tAsLZVexBZqLI4cA?e=tb5JJv) 
-to download the user's manual in PDF.
+The program is very easy to use; however, you can [click here](https://unirioja-my.sharepoint.com/:b:/g/personal/jodivaso_unirioja_es/EcD0rAZJ49pHrSW40yprr2sBtFBxz5tAsLZVexBZqLI4cA?e=tb5JJv) 
+to download the user's manual in PDF format.
 
 ### Controls
 
