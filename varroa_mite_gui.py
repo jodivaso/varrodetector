@@ -2667,7 +2667,7 @@ class ModernVarroaDetectorGUI:
         """Show help dialog with information about the program"""
         help_window = ctk.CTkToplevel(self.root)
         help_window.title("VarroDetector - Help")
-        help_window.geometry("650x400")
+        help_window.geometry("800x500")
 
         # Make the window modal
         help_window.transient(self.root)
