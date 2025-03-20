@@ -2972,6 +2972,11 @@ class ModernVarroaDetectorGUI:
             import webbrowser
             webbrowser.open(f"mailto:{email}")
 
+        # Function to open website
+        def open_website(url):
+            import webbrowser
+            webbrowser.open(url)
+
         email1.bind("<Button-1>", lambda e: open_email("jose.divason@unirioja.es"))
         email2.bind("<Button-1>", lambda e: open_email("jyaniz@unizar.es"))
 
@@ -3061,13 +3066,9 @@ class ModernVarroaDetectorGUI:
         universities = [
             {"logo": "ur_logo.png", "url": "https://www.unirioja.es/"},
             {"logo": "unizar_logo.png", "url": "https://www.unizar.es/"},
-            {"logo": "beeguards_logo.png", "url": "https://www.aragon.es/"}
+            {"logo": "beeguards_logo.png", "url": "https://beeguards.eu//"}
         ]
 
-        # Function to open website
-        def open_website(url):
-            import webbrowser
-            webbrowser.open(url)
 
         # Create and place clickable logo labels
         for uni in universities:
@@ -3080,6 +3081,8 @@ class ModernVarroaDetectorGUI:
                     cursor="hand2"  # Hand cursor to indicate clickability
                 )
                 logo_label.pack(side="left", padx=10)
+                logo_label.bind("<Button-1>", lambda e, url=uni["url"]: open_website(url))
+
 
 
         close_button = ctk.CTkButton(
