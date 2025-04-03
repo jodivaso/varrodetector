@@ -73,6 +73,7 @@ When you click "Save Results", a new folder named "results" will be created in y
 
 - **images/**: All processed images with visible detection boxes
 - **labels/**: YOLO format text files with detection coordinates
+- **roi.txt**: A text file containing the points of the Region of Interest of the images
 - **statistics.csv**: Detailed counts for each image
 - **statistics_subfolders.csv**: Summary statistics by subfolder
 
