@@ -3156,4 +3156,4 @@ if __name__ == "__main__":
 # For Windows:
 # pyinstaller --onefile --noconsole --add-data "model/weights/best.pt;model/weights" --add-data "icon.ico;." --add-data "icon_for_sidebar.png;." --add-data "ur_logo.png;." --add-data "unizar_logo.png;." --add-data "beeguards_logo.png;." --icon "icon.ico" --splash splash.PNG varroa_mite_gui.py --name=VarroDetector
 # For Linux (cannot be done within a Conda environment, because tkinter will not show properly some round buttons).
-# pyinstaller --onefile --noconsole --add-data "model/weights/best.pt:model/weights" --add-data "icon.ico:." --add-data "icon_for_sidebar.png:." --add-data "ur_logo.png:." --add-data "unizar_logo.png:." --add-data "beeguards_logo.png:." --icon "icon.ico" --splash splash.PNG varroa_mite_gui.py  --name=VarroDetector
+# pyinstaller --onefile --noconsole --add-data "model/weights/best.pt:model/weights" --add-data "icon.ico:." --add-data "icon_for_sidebar.png:." --add-data "ur_logo.png:." --add-data "unizar_logo.png:." --add-data "beeguards_logo.png:." --icon "icon.ico" --splash splash.PNG varroa_mite_gui.py  --name=VarroDetector --hidden-import='PIL._tkinter_finder'
