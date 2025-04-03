@@ -2121,6 +2121,9 @@ class ModernVarroaDetectorGUI:
             # Prepare data structure for subfolder statistics
             subfolder_stats = {}
 
+            # Create a list to store ROI information
+            roi_data = []
+
             for image_name in all_images:
                 # Calculate and update progress
                 progress = processed / total_files
@@ -2154,8 +2157,15 @@ class ModernVarroaDetectorGUI:
                 self.current_image = image_name
                 self.image_viewer.scale = 1.0
 
-                # If this image has an ROI, filter boxes by ROI
+                # If this image has an ROI, filter boxes by ROI and save ROI data
                 if image_name in self.image_viewer.roi_polygons:
+                    # Store ROI data for this image
+                    roi_points = self.image_viewer.roi_polygons[image_name]
+                    roi_data.append({
+                        'image_name': image_name,
+                        'roi_points': roi_points
+                    })
+
                     self.image_viewer.all_boxes = threshold_boxes
                     final_boxes = self.image_viewer.get_boxes_in_roi()
                 else:
@@ -2195,6 +2205,21 @@ class ModernVarroaDetectorGUI:
 
                 processed += 1
                 self.root.update()
+
+            # Save ROI data to roi.txt
+            if roi_data:
+                roi_file_path = os.path.join(results_dir, 'roi.txt')
+                with open(roi_file_path, 'w') as roi_file:
+                    for roi_entry in roi_data:
+                        image_name = roi_entry['image_name']
+                        points = roi_entry['roi_points']
+                        # Write image name
+                        roi_file.write(f"Image: {image_name}\n")
+                        # Write points in readable format
+                        roi_file.write("ROI Points:\n")
+                        for i, point in enumerate(points):
+                            roi_file.write(f"  Point {i + 1}: ({point[0]:.2f}, {point[1]:.2f})\n")
+                        roi_file.write("\n")  # Empty line between entries
 
             # Save main statistics CSV file
             csv_path = os.path.join(results_dir, 'statistics.csv')
@@ -2241,8 +2266,11 @@ class ModernVarroaDetectorGUI:
 
             # Update final progress
             self.update_progress(1.0, "Results saved successfully!")
+
+            # Update success message to include roi.txt
+            roi_message = "Points of Regions of Interest saved to roi.txt\n" if roi_data else ""
             messagebox.showinfo("Success",
-                                f"Results saved to {results_dir}\n"
+                                f"Results saved to {results_dir}\n{roi_message}"
                                 f"Statistics saved to:\n"
                                 f"- statistics.csv\n"
                                 f"- statistics_subfolders.csv")
@@ -2338,9 +2366,18 @@ class ModernVarroaDetectorGUI:
             # Update statistics to show zero counts
             self.update_box_statistics()
 
-            # Clear the image viewer
+            # Clear the image viewer completely
             if hasattr(self, 'image_viewer'):
                 self.image_viewer.canvas.delete("all")
+                # Reset the original_image attribute to None
+                self.image_viewer.original_image = None
+                # Reset tile cache
+                self.image_viewer.tile_cache.clear()
+                # Reset all other relevant image viewer properties
+                self.image_viewer.image_path = None
+                self.image_viewer.all_boxes = []
+                # Reset ROI polygons
+                self.image_viewer.roi_polygons = {}
 
             # Get the new folder
             self.current_folder = filedialog.askdirectory()
@@ -2367,7 +2404,6 @@ class ModernVarroaDetectorGUI:
             print(f"Error in processing: {str(e)}")
             messagebox.showerror("Error", f"Error in processing: {str(e)}")
         finally:
-            self.select_button.configure(state="normal")
             self.select_button.configure(state="normal")
 
     def process_images(self):
@@ -2667,7 +2703,7 @@ class ModernVarroaDetectorGUI:
         """Show help dialog with information about the program"""
         help_window = ctk.CTkToplevel(self.root)
         help_window.title("VarroDetector - Help")
-        help_window.geometry("800x500")
+        help_window.geometry("700x500")
 
         # Make the window modal
         help_window.transient(self.root)
