@@ -14,7 +14,7 @@ from concurrent.futures import ThreadPoolExecutor
 from scipy.spatial.distance import euclidean
 import rawpy
 import csv
-
+import platform
 
 # Set appearance mode and color theme
 ctk.set_appearance_mode("light")  # Changed to light mode
@@ -619,16 +619,21 @@ class ModernTiledImageViewer(ctk.CTkFrame):
 
         return roi_boxes
 
+
     def _bind_events(self):
+
         self.canvas.bind("<ButtonPress-1>", self.on_button_press)
         self.canvas.bind("<B1-Motion>", self.on_drag)
         self.canvas.bind("<ButtonRelease-1>", self.on_button_release)
         self.canvas.bind("<ButtonPress-3>", self.delete_box)
         self.canvas.bind("<Motion>", self.on_mouse_move)
-        self.canvas.bind("<MouseWheel>", self.zoom)
+        if platform.system() == "Linux":
+            self.canvas.bind("<Button-4>", self.zoom)  # Scroll up on Linux
+            self.canvas.bind("<Button-5>", self.zoom)  # Scroll down on Linux
+        else:
+            self.canvas.bind("<MouseWheel>", self.zoom)  # Windows and macOS
         self.canvas.bind("<ButtonPress-2>", self.start_pan)
         self.canvas.bind("<B2-Motion>", self.pan)
-
 
     # Add these new methods to ModernTiledImageViewer:
     def set_confidence_threshold(self, value):
@@ -1126,6 +1131,11 @@ class ModernTiledImageViewer(ctk.CTkFrame):
         if not self.original_image or hasattr(self, '_zooming'):
             return
 
+        if platform.system() == "Linux":
+            delta = 120 if event.num == 4 else -120
+        else:
+            delta = event.delta
+
         # Store ROI state before zooming
         had_roi = self.GUI.current_image in self.roi_polygons
 
@@ -1364,7 +1374,10 @@ class ModernVarroaDetectorGUI:
 
         # Maximize window
         self.root.update()
-        self.root.state('zoomed')
+        if platform.system() == "Linux":
+            self.root.geometry("1200x800")
+        else:
+            self.root.state('zoomed')
 
     def setup_ui(self):
         # Create main container with padding and rounded corners
@@ -3140,5 +3153,7 @@ def main():
 if __name__ == "__main__":
     main()
 
+# For Windows:
 # pyinstaller --onefile --noconsole --add-data "model/weights/best.pt;model/weights" --add-data "icon.ico;." --add-data "icon_for_sidebar.png;." --add-data "ur_logo.png;." --add-data "unizar_logo.png;." --add-data "beeguards_logo.png;." --icon "icon.ico" --splash splash.PNG varroa_mite_gui.py --name=VarroDetector
-
+# For Linux:
+# pyinstaller --onefile --noconsole --add-data "model/weights/best.pt:model/weights" --add-data "icon.ico:." --add-data "icon_for_sidebar.png:." --add-data "ur_logo.png:." --add-data "unizar_logo.png:." --add-data "beeguards_logo.png:." --icon "icon.ico" --splash splash.PNG varroa_mite_gui.py  --name=VarroDetector
