@@ -93,6 +93,9 @@ When you click "Save Results", a new folder named "results" will be created in y
 - **num_images**: Number of images in this subfolder
 - **name_images**: List of image filenames
 
+## Sample images
+
+Some sample images to test the program can be downloaded [from here.](https://unirioja-my.sharepoint.com/:u:/g/personal/jodivaso_unirioja_es/EREh4ExsQDNEtqyid0AeL_ABldNzCcpmlQ4J-SzsjvT07w?e=5c65BJ) 
 
 ## Acknowledgments
 
