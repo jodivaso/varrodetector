@@ -1149,7 +1149,7 @@ class ModernTiledImageViewer(ctk.CTkFrame):
 
         # Calculate new scale
         old_scale = self.scale
-        target_scale = self.scale * (1.2 if event.delta > 0 else 1 / 1.2)
+        target_scale = self.scale * (1.2 if delta > 0 else 1 / 1.2)
 
         # Limit minimum and maximum zoom
         min_scale = self.initial_scale * 0.5
@@ -2716,11 +2716,7 @@ class ModernVarroaDetectorGUI:
         """Show help dialog with information about the program"""
         help_window = ctk.CTkToplevel(self.root)
         help_window.title("VarroDetector - Help")
-        help_window.geometry("700x500")
-
-        # Make the window modal
-        help_window.transient(self.root)
-        help_window.grab_set()
+        help_window.geometry("800x500")
 
         # Center the window
         help_window.update_idletasks()
@@ -2729,11 +2725,23 @@ class ModernVarroaDetectorGUI:
         x = (help_window.winfo_screenwidth() // 2) - (width // 2)
         y = (help_window.winfo_screenheight() // 2) - (height // 2)
         help_window.geometry(f'{width}x{height}+{x}+{y}')
+    
+        # Wait a moment before making the window modal - this gives Tkinter time to properly create and map the window
+        def make_modal():
+            try:
+                help_window.transient(self.root)
+                help_window.grab_set()
+            except Exception as e:
+                print(f"Note: Could not make help window modal: {str(e)}")
+                # The window will still work, just not modal
+            
+        # Schedule the grab_set after a short delay
+        self.root.after(100, make_modal)
 
         # Create tabview for better organization
         tabview = ctk.CTkTabview(help_window, fg_color=COLORS['surface'])
         tabview.pack(fill="both", expand=True, padx=20, pady=20)
-
+        
         # Create tabs
         overview_tab = tabview.add("Overview")
         controls_tab = tabview.add("Controls")
@@ -3156,4 +3164,4 @@ if __name__ == "__main__":
 # For Windows:
 # pyinstaller --onefile --noconsole --add-data "model/weights/best.pt;model/weights" --add-data "icon.ico;." --add-data "icon_for_sidebar.png;." --add-data "ur_logo.png;." --add-data "unizar_logo.png;." --add-data "beeguards_logo.png;." --icon "icon.ico" --splash splash.PNG varroa_mite_gui.py --name=VarroDetector
 # For Linux (cannot be done within a Conda environment, because tkinter will not show properly some round buttons).
-# pyinstaller --onefile --noconsole --add-data "model/weights/best.pt:model/weights" --add-data "icon.ico:." --add-data "icon_for_sidebar.png:." --add-data "ur_logo.png:." --add-data "unizar_logo.png:." --add-data "beeguards_logo.png:." --icon "icon.ico" --splash splash.PNG varroa_mite_gui.py  --name=VarroDetector --hidden-import='PIL._tkinter_finder'
+# pyinstaller --onefile --noconsole --add-data "model/weights/best.pt:model/weights" --add-data "icon.ico:." --add-data "icon_for_sidebar.png:." --add-data "ur_logo.png:." --add-data "unizar_logo.png:." --add-data "beeguards_logo.png:." --icon "icon.ico" --splash splash.PNG varroa_mite_gui.py  --name=VarroDetector
