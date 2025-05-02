@@ -4,7 +4,7 @@
 The software runs in low-range computers (no GPU is needed). Neither installation nor internet connection is needed, just double-click
 on the executable.</p>
 
-<p>The detection process is based on a YOLOv11 nano model specifically trained on hundreds of images to identify Varroa mites.</p>
+<p>The detection process is based on a YOLO nano model (currently, YOLOv11 nano) specifically trained on hundreds of images to identify Varroa mites.</p>
 
 <kbd>
 <img src="readme_video.gif" alt="VarroDetector example"/>
@@ -13,7 +13,7 @@ on the executable.</p>
 ## Features
 
 - **String Detection**: Automatically identifies and crops images based on guide strings
-- **AI-powered Detection**: Uses YOLOv11 nano learning model to identify Varroa mites
+- **AI-powered Detection**: Uses YOLO nano learning model to identify Varroa mites
 - **Confidence Threshold**: Adjustable detection sensitivity per image or globally
 - **Region of Interest (ROI)**: Define specific areas for mite counting
 - **Subfolder Support**: Processes nested folder structures
