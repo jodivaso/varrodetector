@@ -2734,7 +2734,7 @@ class ModernVarroaDetectorGUI:
         else:
             help_window.transient(self.root)
             help_window.grab_set()
-            help_window.geometry("800x500")
+        help_window.geometry("800x500")
 
 
         # Create tabview for better organization
