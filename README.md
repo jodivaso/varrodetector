@@ -23,7 +23,7 @@ on the executable.</p>
 ### Execution Options
 
 #### Option 1: Executable File (Recommended)
-1. Download the [VarroDetector executable file for windows](https://unirioja-my.sharepoint.com/:u:/g/personal/jodivaso_unirioja_es/Eb0Jq31RbwpAjirbJkOjRVQBsu2onCeP1FL0neXk8dRHYw?e=EYUUie) (more platforms coming soon).
+1. Download the [VarroDetector executable file for windows](https://github.com/jodivaso/varrodetector/releases/download/v0.0.1/VarroDetector.exe) (more platforms coming soon).
 2. Run the executable file
 
 *Note:* This file is self-contained, so the application takes a few seconds to start since the contents must be unzipped on the fly.
