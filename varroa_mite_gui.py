@@ -22,15 +22,15 @@ ctk.set_default_color_theme("blue")
 
 # Custom color scheme
 COLORS = {
-    'primary': '#2563eb',      # Blue
-    'secondary': '#4b5563',    # Gray
-    'accent': '#3b82f6',       # Light blue
-    'success': '#22c55e',      # Green
-    'warning': '#f59e0b',      # Yellow
-    'error': '#ef4444',        # Red
-    'background': '#ffffff',   # White
-    'surface': '#f3f4f6',     # Light gray
-    'text': '#1f2937',        # Dark gray
+    'primary': '#2563eb',  # Blue
+    'secondary': '#4b5563',  # Gray
+    'accent': '#3b82f6',  # Light blue
+    'success': '#22c55e',  # Green
+    'warning': '#f59e0b',  # Yellow
+    'error': '#ef4444',  # Red
+    'background': '#ffffff',  # White
+    'surface': '#f3f4f6',  # Light gray
+    'text': '#1f2937',  # Dark gray
 }
 
 
@@ -72,6 +72,7 @@ def process_dng(file_path):
         print(f"Error processing DNG file: {str(e)}")
         return None
 
+
 def load_image_safely(image_path):
     """Load image using cv2 and convert to PIL Image to avoid truncation errors"""
     # Read image using cv2
@@ -84,6 +85,7 @@ def load_image_safely(image_path):
 
     # Convert to PIL Image
     return Image.fromarray(img_rgb)
+
 
 # class RedirectText:
 #     def __init__(self, text_widget):
@@ -107,6 +109,7 @@ def get_resource_path(relative_path):
         # En desarrollo, los recursos están en el directorio actual
         base_path = os.path.abspath(".")
     return os.path.join(base_path, relative_path)
+
 
 def getAngle(a, b, c):
     ang = math.degrees(math.atan2(c[1] - b[1], c[0] - b[0]) - math.atan2(a[1] - b[1], a[0] - b[0]))
@@ -133,9 +136,9 @@ def line_intersection(line1, line2):
 
 def findIntersection(x1, y1, x2, y2, x3, y3, x4, y4):
     px = ((x1 * y2 - y1 * x2) * (x3 - x4) - (x1 - x2) * (x3 * y4 - y3 * x4)) / (
-                (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4))
+            (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4))
     py = ((x1 * y2 - y1 * x2) * (y3 - y4) - (y1 - y2) * (x3 * y4 - y3 * x4)) / (
-                (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4))
+            (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4))
     return [px, py]
 
 
@@ -295,7 +298,8 @@ def crop_green_lines(initial_img_path):
                     mask = np.zeros(img.shape[:2], dtype="uint8")
                     drawLine(mask, l[0], l[1], l[2], l[3], 255)
                     drawLine(mask, x1, y1, x2, y2, 255)
-                    print("Detected green strings in file", os.path.basename(initial_img_path) + ".", "Detected angle:", angle)
+                    print("Detected green strings in file", os.path.basename(initial_img_path) + ".", "Detected angle:",
+                          angle)
                     mask = cv2.bitwise_not(mask)
                     contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
 
@@ -335,8 +339,8 @@ class ModernTiledImageViewer(ctk.CTkFrame):
 
     def __init__(self, parent, GUI):
         super().__init__(parent)
-        self.parent= parent
-        self.GUI = GUI # We are passing the whole GUI and this is somehow weird, but we need it to update the statistics.
+        self.parent = parent
+        self.GUI = GUI  # We are passing the whole GUI and this is somehow weird, but we need it to update the statistics.
 
         # Storage for all boxes with their confidence scores
         self.all_boxes = []  # Store all boxes (detections and user-drawn) with confidence scores
@@ -399,7 +403,7 @@ class ModernTiledImageViewer(ctk.CTkFrame):
         self.root.bind("<KeyRelease>", self.on_key_release)
 
         # Create loading label
-        #self.loading_label = ctk.CTkLabel(self, text="Loading image...")
+        # self.loading_label = ctk.CTkLabel(self, text="Loading image...")
 
         # Create thread pool
         self.executor = ThreadPoolExecutor(max_workers=4)
@@ -618,7 +622,6 @@ class ModernTiledImageViewer(ctk.CTkFrame):
                 roi_boxes.append(box)
 
         return roi_boxes
-
 
     def _bind_events(self):
 
@@ -979,7 +982,7 @@ class ModernTiledImageViewer(ctk.CTkFrame):
             self.draw_all_boxes()
 
         except Exception as e:
-            #self.loading_label.place_forget()
+            # self.loading_label.place_forget()
             print(f"Error loading image: {str(e)}")
             messagebox.showerror("Error", f"Could not load image: {str(e)}")
 
@@ -1002,7 +1005,6 @@ class ModernTiledImageViewer(ctk.CTkFrame):
 
         # Use the smaller scale to ensure entire image is visible
         return min(width_scale, height_scale) * 0.95  # 95% to leave some margin
-
 
     def preload_tiles(self):
         """Preload all tiles in background"""
@@ -1034,7 +1036,7 @@ class ModernTiledImageViewer(ctk.CTkFrame):
                 tile_key = self.get_tile_key(row, col, self.scale)
                 self.tile_cache[tile_key] = ImageTk.PhotoImage(tile)
         # Hide loading label and draw tiles
-        #self.loading_label.place_forget()
+        # self.loading_label.place_forget()
         self.draw_visible_tiles()
         self.draw_all_boxes()
         # Center the image
@@ -1057,7 +1059,6 @@ class ModernTiledImageViewer(ctk.CTkFrame):
         # Set scroll position
         self.canvas.xview_moveto(x_center / scaled_width if scaled_width > viewport_width else 0)
         self.canvas.yview_moveto(y_center / scaled_height if scaled_height > viewport_height else 0)
-
 
     def load_tile(self, row, col):
         """Load a specific tile of the image with a small overlap"""
@@ -1125,7 +1126,6 @@ class ModernTiledImageViewer(ctk.CTkFrame):
                         tags="tile"
                     )
 
-
     def zoom(self, event):
         """Handle zoom with mouse wheel"""
         if not self.original_image or hasattr(self, '_zooming'):
@@ -1149,7 +1149,7 @@ class ModernTiledImageViewer(ctk.CTkFrame):
 
         # Calculate new scale
         old_scale = self.scale
-        target_scale = self.scale * (1.2 if event.delta > 0 else 1 / 1.2)
+        target_scale = self.scale * (1.2 if delta > 0 else 1 / 1.2)
 
         # Limit minimum and maximum zoom
         min_scale = self.initial_scale * 0.5
@@ -1442,7 +1442,7 @@ class ModernVarroaDetectorGUI:
             text="Select Input Folder",
             command=self.run_task_in_thread,
             height=35,
-            #font=self.default_font,
+            # font=self.default_font,
             font=("Inter", 13, "bold"),
             fg_color=COLORS['primary'],
             hover_color=COLORS['accent'],
@@ -1556,7 +1556,6 @@ class ModernVarroaDetectorGUI:
         # Disable ROI button initially
         self.roi_button.configure(state="disabled")
 
-
         # Add statistics frame
         self.setup_statistics_frame()
 
@@ -1601,7 +1600,7 @@ class ModernVarroaDetectorGUI:
             self.sidebar,
             fg_color="transparent"
         )
-        #self.console_frame.pack(fill="x", padx=20, pady=20)
+        # self.console_frame.pack(fill="x", padx=20, pady=20)
 
         self.console_label = ctk.CTkLabel(
             self.console_frame,
@@ -1609,7 +1608,7 @@ class ModernVarroaDetectorGUI:
             font=self.header_font,
             text_color=COLORS['text']
         )
-        #self.console_label.pack(anchor="w", pady=(0, 10))
+        # self.console_label.pack(anchor="w", pady=(0, 10))
 
         # Modern console output
         self.text_output = ctk.CTkTextbox(
@@ -1652,7 +1651,6 @@ class ModernVarroaDetectorGUI:
                     rel_path = os.path.relpath(full_path, folder)
                     image_files.append((full_path, rel_path))
         return image_files
-
 
     def apply_threshold_to_all(self):
         """Apply the current confidence threshold to all images"""
@@ -1697,7 +1695,6 @@ class ModernVarroaDetectorGUI:
             print(f"Error applying threshold to all images: {str(e)}")
             messagebox.showerror("Error", f"Error applying threshold: {str(e)}")
             self.update_progress(0, "Ready")
-
 
     def toggle_roi_mode(self):
         if not hasattr(self.image_viewer, 'drawing_roi') or not self.image_viewer.drawing_roi:
@@ -2345,7 +2342,6 @@ class ModernVarroaDetectorGUI:
 
         return self.current_boxes[image_name]
 
-
     @staticmethod
     def get_resource_path(relative_path):
         if hasattr(sys, '_MEIPASS'):
@@ -2676,7 +2672,7 @@ class ModernVarroaDetectorGUI:
         # Check if the same image is already loaded - if so, do nothing
         if self.current_image == selected:
             return
-        
+
         try:
             # Update current image
             self.current_image = selected
@@ -2710,25 +2706,36 @@ class ModernVarroaDetectorGUI:
             print(f"Error loading image: {str(e)}")
             messagebox.showerror("Error", f"Error loading image: {str(e)}")
 
-
-
     def show_help(self):
         """Show help dialog with information about the program"""
         help_window = ctk.CTkToplevel(self.root)
         help_window.title("VarroDetector - Help")
-        help_window.geometry("700x500")
-
         # Make the window modal
-        help_window.transient(self.root)
-        help_window.grab_set()
+        if platform.system() == "Linux":
+            # Center the window
+            help_window.update_idletasks()
+            width = help_window.winfo_width()
+            height = help_window.winfo_height()
+            x = (help_window.winfo_screenwidth() // 2) - (width // 2)
+            y = (help_window.winfo_screenheight() // 2) - (height // 2)
+            help_window.geometry(f'{width}x{height}+{x}+{y}')
 
-        # Center the window
-        help_window.update_idletasks()
-        width = help_window.winfo_width()
-        height = help_window.winfo_height()
-        x = (help_window.winfo_screenwidth() // 2) - (width // 2)
-        y = (help_window.winfo_screenheight() // 2) - (height // 2)
-        help_window.geometry(f'{width}x{height}+{x}+{y}')
+            # Wait a moment before making the window modal - this gives Tkinter time to properly create and map the window
+            def make_modal():
+                try:
+                    help_window.transient(self.root)
+                    help_window.grab_set()
+                except Exception as e:
+                    print(f"Note: Could not make help window modal: {str(e)}")
+                    # The window will still work, just not modal
+
+            # Schedule the grab_set after a short delay
+            self.root.after(100, make_modal)
+        else:
+            help_window.transient(self.root)
+            help_window.grab_set()
+            help_window.geometry("800x500")
+
 
         # Create tabview for better organization
         tabview = ctk.CTkTabview(help_window, fg_color=COLORS['surface'])
@@ -2763,7 +2770,7 @@ class ModernVarroaDetectorGUI:
                 font=self.default_font,
                 text_color=COLORS['text'],
                 justify="left",
-                wraplength=600
+                wraplength=700
             )
             content.pack(anchor="w", pady=pady, padx=padx)
             return content
@@ -2917,7 +2924,7 @@ class ModernVarroaDetectorGUI:
 
         create_header(workflow_frame, "Processing Information")
 
-        workflow_info = ("The analysis will be also performed to any image contained in subfolders of the input folder. "                         
+        workflow_info = ("The analysis will be also performed to any image contained in subfolders of the input folder. "
                          "The confidence score can be set up individually for each image. Lower confidence score will show more detections, but possibly with more false positives.\n\n"
                          "The \"Apply Threshold to All Images\" button allows the user to quickly set the same confidence threshold across all the images.\n\n"
                          "The Save Button will save the images (with the printed detections) and the coordinates of the detections (the labels) in a folder named \"results\" within the input folder.")
@@ -3099,8 +3106,8 @@ class ModernVarroaDetectorGUI:
             try:
                 # Create CTkImage for the logo
                 if "beeguards" in path:
-                    width=74
-                    height=40
+                    width = 74
+                    height = 40
                 logo = ctk.CTkImage(
                     light_image=Image.open(self.get_resource_path(path)),
                     dark_image=Image.open(self.get_resource_path(path)),
@@ -3118,7 +3125,6 @@ class ModernVarroaDetectorGUI:
             {"logo": "beeguards_logo.png", "url": "https://beeguards.eu//"}
         ]
 
-
         # Create and place clickable logo labels
         for uni in universities:
             logo = load_university_logo(uni["logo"])
@@ -3132,8 +3138,6 @@ class ModernVarroaDetectorGUI:
                 logo_label.pack(side="left", padx=10)
                 logo_label.bind("<Button-1>", lambda e, url=uni["url"]: open_website(url))
 
-
-
         close_button = ctk.CTkButton(
             button_frame,
             text="Close",
@@ -3144,6 +3148,7 @@ class ModernVarroaDetectorGUI:
             hover_color=COLORS['accent']
         )
         close_button.pack(side="right")
+
 
 def main():
     app = ModernVarroaDetectorGUI()
