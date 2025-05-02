@@ -1149,7 +1149,7 @@ class ModernTiledImageViewer(ctk.CTkFrame):
 
         # Calculate new scale
         old_scale = self.scale
-        target_scale = self.scale * (1.2 if delta > 0 else 1 / 1.2)
+        target_scale = self.scale * (1.2 if event.delta > 0 else 1 / 1.2)
 
         # Limit minimum and maximum zoom
         min_scale = self.initial_scale * 0.5
@@ -2716,7 +2716,11 @@ class ModernVarroaDetectorGUI:
         """Show help dialog with information about the program"""
         help_window = ctk.CTkToplevel(self.root)
         help_window.title("VarroDetector - Help")
-        help_window.geometry("800x500")
+        help_window.geometry("700x500")
+
+        # Make the window modal
+        help_window.transient(self.root)
+        help_window.grab_set()
 
         # Center the window
         help_window.update_idletasks()
@@ -2725,23 +2729,11 @@ class ModernVarroaDetectorGUI:
         x = (help_window.winfo_screenwidth() // 2) - (width // 2)
         y = (help_window.winfo_screenheight() // 2) - (height // 2)
         help_window.geometry(f'{width}x{height}+{x}+{y}')
-    
-        # Wait a moment before making the window modal - this gives Tkinter time to properly create and map the window
-        def make_modal():
-            try:
-                help_window.transient(self.root)
-                help_window.grab_set()
-            except Exception as e:
-                print(f"Note: Could not make help window modal: {str(e)}")
-                # The window will still work, just not modal
-            
-        # Schedule the grab_set after a short delay
-        self.root.after(100, make_modal)
 
         # Create tabview for better organization
         tabview = ctk.CTkTabview(help_window, fg_color=COLORS['surface'])
         tabview.pack(fill="both", expand=True, padx=20, pady=20)
-        
+
         # Create tabs
         overview_tab = tabview.add("Overview")
         controls_tab = tabview.add("Controls")
@@ -2771,7 +2763,7 @@ class ModernVarroaDetectorGUI:
                 font=self.default_font,
                 text_color=COLORS['text'],
                 justify="left",
-                wraplength=700
+                wraplength=600
             )
             content.pack(anchor="w", pady=pady, padx=padx)
             return content
@@ -2925,7 +2917,7 @@ class ModernVarroaDetectorGUI:
 
         create_header(workflow_frame, "Processing Information")
 
-        workflow_info = ("The analysis will be also performed to any image contained in subfolders of the input folder."                         
+        workflow_info = ("The analysis will be also performed to any image contained in subfolders of the input folder. "                         
                          "The confidence score can be set up individually for each image. Lower confidence score will show more detections, but possibly with more false positives.\n\n"
                          "The \"Apply Threshold to All Images\" button allows the user to quickly set the same confidence threshold across all the images.\n\n"
                          "The Save Button will save the images (with the printed detections) and the coordinates of the detections (the labels) in a folder named \"results\" within the input folder.")
