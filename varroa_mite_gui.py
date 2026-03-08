@@ -16,6 +16,8 @@ import rawpy
 import csv
 import platform
 import traceback
+from pillow_heif import register_heif_opener
+register_heif_opener()
 
 # Set appearance mode and color theme
 ctk.set_appearance_mode("light")  # Changed to light mode
@@ -71,6 +73,19 @@ def process_dng(file_path):
         return bgr_image
     except Exception as e:
         print(f"Error processing DNG file: {str(e)}")
+        return None
+
+
+def process_heic(filepath):
+    """Process a HEIC/HEIF file and return a BGR image (like processdng)."""
+    try:
+        pil_image = Image.open(filepath)          # pillow-heif handles this
+        rgb_image = np.array(pil_image.convert("RGB"))
+        rgb_image = adjust_dynamic_brightness(rgb_image, target_brightness=150)
+        bgr_image = cv2.cvtColor(rgb_image, cv2.COLOR_RGB2BGR)
+        return bgr_image
+    except Exception as e:
+        print(f"Error processing HEIC file: {str(e)}")
         return None
 
 
@@ -1677,7 +1692,7 @@ class ModernVarroaDetectorGUI:
         image_files = []
         for root, _, files in os.walk(folder):
             for f in files:
-                if f.lower().endswith(('.jpg', '.dng')):
+                if f.lower().endswith(('.jpg', '.dng', '.heic', '.heif')):
                     # Get the full path and the relative path
                     full_path = os.path.join(root, f)
                     rel_path = os.path.relpath(full_path, folder)
@@ -2444,6 +2459,17 @@ class ModernVarroaDetectorGUI:
                     crop_img, binary_mask = crop_green_lines_from_array(img)
                     if crop_img is not None:
                         cv2.imwrite(glined_output_path, crop_img)
+
+                elif input_path.lower().endswith(('.heic', '.heif')):  # ← NEW BLOCK
+                    img = process_heic(input_path)
+                    if img is None:
+                        print(f"Failed to process HEIC file {rel_path}")
+                        continue
+                    cv2.imwrite(base_output_path, img)  # save as .jpg
+                    cropimg, binary_mask = crop_green_lines_from_array(img)
+                    if cropimg is not None:
+                        cv2.imwrite(glined_output_path, cropimg)
+
                 else:
                     # For JPGs, copy the original to be the base image
                     shutil.copyfile(input_path, base_output_path)
@@ -2459,7 +2485,7 @@ class ModernVarroaDetectorGUI:
                 print(f"Error processing image {rel_path}: {str(e)}")
                 print(traceback.format_exc())
                 # Ensure the base image exists even if cropping fails
-                if not os.path.exists(base_output_path) and not input_path.lower().endswith('.dng'):
+                if not os.path.exists(base_output_path) and not input_path.lower().endswith(('.dng','.heic', '.heif')):
                     shutil.copyfile(input_path, base_output_path)
 
 
