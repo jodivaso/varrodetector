@@ -15,6 +15,7 @@ from scipy.spatial.distance import euclidean
 import rawpy
 import csv
 import platform
+import traceback
 
 # Set appearance mode and color theme
 ctk.set_appearance_mode("light")  # Changed to light mode
@@ -203,7 +204,7 @@ def process_green_lines(img, original_img=None, source_name="image"):
                                  thickness=cv2.FILLED)
                 final_mask = cv2.resize(final_mask, (width, height))
 
-                result = cv2.bitwise_and(original_img or img, final_mask)
+                result = cv2.bitwise_and(img, final_mask)
                 return result, final_mask
 
     print(f"No green strings detected in {source_name}.")
@@ -1667,7 +1668,6 @@ class ModernVarroaDetectorGUI:
             self._load_image_into_viewer(self.current_image)
         except Exception as e:
             print(f"Error reloading image: {str(e)}")
-            import traceback
             print(traceback.format_exc())
             messagebox.showerror("Error", f"Error reloading image: {str(e)}")
 
@@ -2457,6 +2457,7 @@ class ModernVarroaDetectorGUI:
 
             except Exception as e:
                 print(f"Error processing image {rel_path}: {str(e)}")
+                print(traceback.format_exc())
                 # Ensure the base image exists even if cropping fails
                 if not os.path.exists(base_output_path) and not input_path.lower().endswith('.dng'):
                     shutil.copyfile(input_path, base_output_path)
