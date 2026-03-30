@@ -17,6 +17,7 @@ import csv
 import platform
 import traceback
 from pillow_heif import register_heif_opener
+
 register_heif_opener()
 
 # Set appearance mode and color theme
@@ -79,7 +80,7 @@ def process_dng(file_path):
 def process_heic(filepath):
     """Process a HEIC/HEIF file and return a BGR image (like processdng)."""
     try:
-        pil_image = Image.open(filepath)          # pillow-heif handles this
+        pil_image = Image.open(filepath)  # pillow-heif handles this
         rgb_image = np.array(pil_image.convert("RGB"))
         rgb_image = adjust_dynamic_brightness(rgb_image, target_brightness=150)
         bgr_image = cv2.cvtColor(rgb_image, cv2.COLOR_RGB2BGR)
@@ -101,6 +102,7 @@ def load_image_safely(image_path):
 
     # Convert to PIL Image
     return Image.fromarray(img_rgb)
+
 
 def get_resource_path(relative_path):
     """Obtiene la ruta absoluta de un recurso, sea en desarrollo o en el ejecutable."""
@@ -239,6 +241,7 @@ def crop_green_lines(initial_img_path):
     return process_green_lines(initial_img, original_img=initial_img,
                                source_name=os.path.basename(initial_img_path))
 
+
 def filter_bboxes_by_mask(mask, bboxes):
     """
     Filters bounding boxes that are fully contained within the white area (255) of a binary mask.
@@ -268,6 +271,7 @@ def filter_bboxes_by_mask(mask, bboxes):
             filtered_bboxes.append(bbox)
 
     return filtered_bboxes
+
 
 class ModernTiledImageViewer(ctk.CTkFrame):
 
@@ -605,7 +609,7 @@ class ModernTiledImageViewer(ctk.CTkFrame):
     def get_visible_boxes(self):
         """Return only boxes that meet the confidence threshold"""
         return self.get_active_boxes()
-        #return [box for box in self.all_boxes if box[4] >= self.confidence_threshold]
+        # return [box for box in self.all_boxes if box[4] >= self.confidence_threshold]
 
     def get_box_at_position(self, x, y):
         """Return box and hit area ('edge', 'corner', 'inside', or None) at given position"""
@@ -871,7 +875,7 @@ class ModernTiledImageViewer(ctk.CTkFrame):
             # Sync the boxes back to GUI.current_boxes so statistics and saving work correctly
             if hasattr(self.GUI, 'current_image') and self.GUI.current_image:
                 self.GUI.current_boxes[self.GUI.current_image] = self.all_boxes.copy()
-            
+
             # Update statistics in GUI
             if hasattr(self.GUI, 'update_box_statistics'):
                 self.GUI.update_box_statistics()
@@ -1324,7 +1328,8 @@ class ModernVarroaDetectorGUI:
         self.green_line_enabled = {}
         self.current_image = None
         self.current_boxes = {}  # Store boxes for each image
-        self.boxes_green_lines = {} #Store boxes for each image for green lines
+        self.boxes_green_lines = {}  # Store boxes for each image for green lines
+        self._stats_cache = {}  # Cache: image_name -> box count (avoids recalculating all images on every slider tick)
 
         # Set default font
         self.default_font = ("Inter", 13)
@@ -1564,7 +1569,8 @@ class ModernVarroaDetectorGUI:
             corner_radius=8,
             state="disabled"
         )
-        self.apply_green_lines_all_button.pack(side="left", expand=True, fill="x", padx=(10, 0))  # Espacio entre checkbox y botón
+        self.apply_green_lines_all_button.pack(side="left", expand=True, fill="x",
+                                               padx=(10, 0))  # Espacio entre checkbox y botón
 
         # Add statistics frame
         self.setup_statistics_frame()
@@ -1663,6 +1669,8 @@ class ModernVarroaDetectorGUI:
         messagebox.showinfo("Success",
                             f"Green line cropping has been set to '{'enabled' if is_enabled else 'disabled'}' for all images.")
 
+        self._stats_cache.clear()  # Invalidate all cached counts
+
         # If an image is currently displayed, reload it to reflect the change
         if self.current_image:
             try:
@@ -1686,11 +1694,12 @@ class ModernVarroaDetectorGUI:
             print(traceback.format_exc())
             messagebox.showerror("Error", f"Error reloading image: {str(e)}")
 
-
     def get_all_images(self, folder):
         """Recursively get all JPG and DNG files from folder and subfolders"""
         image_files = []
-        for root, _, files in os.walk(folder):
+        for root, dirs, files in os.walk(folder):
+            # Exclude 'results' and 'processed_images' folders from scanning
+            dirs[:] = [d for d in dirs if d not in ('results', 'processed_images')]
             for f in files:
                 if f.lower().endswith(('.jpg', '.dng', '.heic', '.heif')):
                     # Get the full path and the relative path
@@ -1732,6 +1741,7 @@ class ModernVarroaDetectorGUI:
                 self.image_viewer.scale = temp_scale
 
             # Update statistics to reflect new thresholds
+            self._stats_cache.clear()  # Invalidate all cached counts
             self.update_box_statistics()
 
             # Reset progress bar and show completion message
@@ -1794,7 +1804,7 @@ class ModernVarroaDetectorGUI:
             text_color=COLORS['text'],
             height=20
         )
-        self.current_boxes_label.pack(anchor="w",pady=(0, 0))
+        self.current_boxes_label.pack(anchor="w", pady=(0, 0))
 
         self.subfolder_boxes_label = ctk.CTkLabel(  # New label for subfolder count
             self.stats_frame,
@@ -1803,7 +1813,7 @@ class ModernVarroaDetectorGUI:
             text_color=COLORS['text'],
             height=20
         )
-        self.subfolder_boxes_label.pack(anchor="w",pady=(0, 0))
+        self.subfolder_boxes_label.pack(anchor="w", pady=(0, 0))
 
         self.total_boxes_label = ctk.CTkLabel(
             self.stats_frame,
@@ -1812,7 +1822,7 @@ class ModernVarroaDetectorGUI:
             text_color=COLORS['text'],
             height=20
         )
-        self.total_boxes_label.pack(anchor="w",pady=(0, 0))
+        self.total_boxes_label.pack(anchor="w", pady=(0, 0))
 
     def _get_final_boxes(self, image_name):
         """
@@ -1864,8 +1874,9 @@ class ModernVarroaDetectorGUI:
 
     def update_box_statistics(self):
         """
-        Update box count statistics by using the centralized _get_final_boxes helper function
-        to ensure consistency with saved results.
+        Update box count statistics using a cache to avoid recalculating all images
+        on every slider movement. Only the current image is recalculated each time;
+        all other images use their cached counts.
         """
         # Initialize counts
         current_count = 0
@@ -1884,14 +1895,22 @@ class ModernVarroaDetectorGUI:
         if self.current_image:
             current_subfolder_path = os.path.dirname(self.current_image)
 
+        # Always invalidate the current image so its count reflects the latest slider/ROI state
+        if self.current_image and self.current_image in self._stats_cache:
+            del self._stats_cache[self.current_image]
+
         all_image_names = list(self.current_boxes.keys())
 
-        # --- SINGLE PASS to calculate all statistics ---
+        # --- Calculate counts using cache ---
         for image_name in all_image_names:
             try:
-                # Get the definitive list of boxes using the helper function
-                final_boxes_to_count = self._get_final_boxes(image_name)
-                count_for_this_image = len(final_boxes_to_count)
+                # Use cached count if available, otherwise calculate and cache
+                if image_name in self._stats_cache:
+                    count_for_this_image = self._stats_cache[image_name]
+                else:
+                    final_boxes_to_count = self._get_final_boxes(image_name)
+                    count_for_this_image = len(final_boxes_to_count)
+                    self._stats_cache[image_name] = count_for_this_image
 
                 # Aggregate the counts
                 total_count += count_for_this_image
@@ -1929,8 +1948,6 @@ class ModernVarroaDetectorGUI:
             self.image_viewer.draw_all_boxes()
             if self.current_image in self.image_viewer.roi_polygons:
                 self.image_viewer.draw_roi()
-
-
 
     def update_confidence_threshold(self, value):
         """Update confidence threshold for the current image"""
@@ -2041,8 +2058,9 @@ class ModernVarroaDetectorGUI:
                     width = (x2 - x1) / img_width
                     height = (y2 - y1) / img_height
 
-                    # Write in YOLO format: class x_center y_center width height
-                    f.write(f"0 {x_center} {y_center} {width} {height}\n")
+                    # Write in YOLO format: class x_center y_center width height confidence
+                    confidence = box[4] if len(box) > 4 else 1.0
+                    f.write(f"0 {x_center} {y_center} {width} {height} {confidence}\n")
 
         except Exception as e:
             print(f"Error saving YOLO labels: {str(e)}")
@@ -2251,6 +2269,51 @@ class ModernVarroaDetectorGUI:
                         'name_images': ', '.join(stats['image_names'])
                     })
 
+            # --- Save all_information folder (all labels at threshold 0.1 with confidence) ---
+            all_info_dir = os.path.join(results_dir, "all_information")
+            os.makedirs(all_info_dir, exist_ok=True)
+
+            for image_name in all_image_names:
+                # Get ALL boxes (the master list, unfiltered except by the base 0.1 threshold)
+                master_boxes = self.current_boxes.get(image_name, [])
+                all_boxes_01 = [box for box in master_boxes if box[4] >= 0.1]
+
+                # Create subdirectory structure
+                subdir = os.path.dirname(image_name)
+                if subdir:
+                    os.makedirs(os.path.join(all_info_dir, subdir), exist_ok=True)
+
+                # Save using the same YOLO format with confidence
+                output_label_path = os.path.join(all_info_dir, os.path.splitext(image_name)[0] + '.txt')
+                image_path = os.path.join(self.output_path, image_name)
+                if os.path.exists(image_path):
+                    self.save_yolo_labels(image_path, all_boxes_01, output_label_path)
+
+            # --- Save settings.txt (per-image settings) ---
+            settings_path = os.path.join(results_dir, 'settings.txt')
+            with open(settings_path, 'w') as sf:
+                for image_name in all_image_names:
+                    sf.write(f"[{image_name}]\n")
+
+                    # Confidence threshold
+                    threshold = self.image_confidence_thresholds.get(image_name, 0.1)
+                    sf.write(f"confidence_threshold={threshold:.4f}\n")
+
+                    # String detection
+                    green_lines = self.green_line_enabled.get(image_name, False)
+                    sf.write(f"string_detection={'true' if green_lines else 'false'}\n")
+
+                    # ROI
+                    if image_name in self.image_viewer.roi_polygons:
+                        roi_points = self.image_viewer.roi_polygons[image_name]
+                        # Save as semicolon-separated pairs: x1,y1;x2,y2;...
+                        points_str = ";".join(f"{p[0]:.2f},{p[1]:.2f}" for p in roi_points)
+                        sf.write(f"roi={points_str}\n")
+                    else:
+                        sf.write("roi=none\n")
+
+                    sf.write("\n")
+
             self.update_progress(1.0, "Results saved successfully!")
             messagebox.showinfo("Success", f"Results, statistics, and ROI data saved to:\n{results_dir}")
 
@@ -2308,6 +2371,170 @@ class ModernVarroaDetectorGUI:
 
         return self.current_boxes[image_name]
 
+    def load_existing_results(self):
+        """Load labels from an existing results/all_information folder and restore settings."""
+        results_dir = os.path.join(self.current_folder, "results")
+        all_info_dir = os.path.join(results_dir, "all_information")
+
+        # Fallback: if all_information doesn't exist, try labels (old format)
+        if not os.path.exists(all_info_dir):
+            all_info_dir = os.path.join(results_dir, "labels")
+
+        if not os.path.exists(all_info_dir):
+            messagebox.showwarning("Warning",
+                                   "No 'all_information' or 'labels' folder found inside 'results'. "
+                                   "Cannot load existing results.")
+            return
+
+        print("\n**********************************")
+        print(f"Loading existing results from {os.path.basename(all_info_dir)}")
+        print("**********************************")
+
+        # --- 1. Load all labels ---
+        label_files = []
+        for root, _, files in os.walk(all_info_dir):
+            for f in files:
+                if f.lower().endswith('.txt'):
+                    full_path = os.path.join(root, f)
+                    rel_path = os.path.relpath(full_path, all_info_dir)
+                    label_files.append((full_path, rel_path))
+
+        total_files = len(label_files)
+        total_boxes_loaded = 0
+
+        for idx, (label_path, rel_label_path) in enumerate(label_files, 1):
+            try:
+                progress = idx / total_files
+                self.update_progress(progress, f"Loading labels {idx}/{total_files}")
+
+                image_rel_path = os.path.splitext(rel_label_path)[0] + '.jpg'
+                image_path = os.path.join(self.output_path, image_rel_path)
+
+                if not os.path.exists(image_path):
+                    print(f"Image not found for label {rel_label_path}, skipping.")
+                    continue
+
+                img = cv2.imread(image_path)
+                if img is None:
+                    print(f"Could not read image: {image_path}")
+                    continue
+                img_h, img_w = img.shape[:2]
+
+                boxes = []
+                with open(label_path, 'r') as f:
+                    for line in f:
+                        parts = line.strip().split()
+                        if not parts:
+                            continue
+
+                        if len(parts) >= 6:
+                            _, x, y, w, h, confidence = map(float, parts[:6])
+                        elif len(parts) >= 5:
+                            _, x, y, w, h = map(float, parts[:5])
+                            confidence = 1.0
+                        else:
+                            continue
+
+                        x1 = int((x - w / 2) * img_w)
+                        y1 = int((y - h / 2) * img_h)
+                        x2 = int((x + w / 2) * img_w)
+                        y2 = int((y + h / 2) * img_h)
+                        boxes.append([x1, y1, x2, y2, confidence])
+
+                self.current_boxes[image_rel_path] = boxes
+                total_boxes_loaded += len(boxes)
+                print(f"Loaded {len(boxes)} detections for {image_rel_path}")
+
+            except Exception as e:
+                print(f"Error loading labels for {rel_label_path}: {str(e)}")
+
+        print(f"\nTotal detections loaded from existing results: {total_boxes_loaded}")
+
+        # --- 2. Load settings.txt if it exists ---
+        settings_path = os.path.join(results_dir, 'settings.txt')
+        if os.path.exists(settings_path):
+            print("Loading settings from settings.txt...")
+            self._load_settings_file(settings_path)
+        else:
+            print("No settings.txt found, using defaults.")
+            # Apply defaults for all images
+            for filename in self.current_boxes:
+                self.green_line_enabled[filename] = False
+                self.image_confidence_thresholds[filename] = 0.1
+
+        # --- 3. Pre-cache mask-filtered boxes for images with string detection enabled ---
+        # Without this, every slider tick would re-read the mask from disk via _get_final_boxes.
+        green_images = [img for img, enabled in self.green_line_enabled.items() if enabled]
+        if green_images:
+            print(f"Pre-caching masks for {len(green_images)} images with string detection...")
+            for image_name in green_images:
+                base_path = os.path.join(self.output_path, os.path.splitext(image_name)[0])
+                mask_path = base_path + '.mask.png'
+                if base_path not in self.boxes_green_lines and os.path.exists(mask_path):
+                    try:
+                        mask = cv2.imread(mask_path, cv2.IMREAD_UNCHANGED)
+                        if mask is not None:
+                            master_boxes = self.current_boxes.get(image_name, [])
+                            self.boxes_green_lines[base_path] = filter_bboxes_by_mask(mask, master_boxes)
+                    except Exception as e:
+                        print(f"Error pre-caching mask for {image_name}: {e}")
+
+        self.update_progress(1.0, "Existing results loaded successfully")
+
+    def _load_settings_file(self, settings_path):
+        """Parse settings.txt and restore per-image confidence, ROI, and string detection state."""
+        current_image_name = None
+
+        with open(settings_path, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+
+                # Section header: [image_name]
+                if line.startswith('[') and line.endswith(']'):
+                    current_image_name = line[1:-1]
+                    # Set defaults — will be overridden below if keys are present
+                    self.image_confidence_thresholds[current_image_name] = 0.1
+                    self.green_line_enabled[current_image_name] = False
+                    continue
+
+                if current_image_name is None:
+                    continue
+
+                if line.startswith('confidence_threshold='):
+                    try:
+                        value = float(line.split('=', 1)[1])
+                        self.image_confidence_thresholds[current_image_name] = value
+                    except ValueError:
+                        pass
+
+                elif line.startswith('string_detection='):
+                    value = line.split('=', 1)[1].strip().lower()
+                    self.green_line_enabled[current_image_name] = (value == 'true')
+
+                elif line.startswith('roi='):
+                    value = line.split('=', 1)[1].strip()
+                    if value.lower() == 'none':
+                        continue
+                    try:
+                        points = []
+                        for pair in value.split(';'):
+                            coords = pair.split(',')
+                            if len(coords) == 2:
+                                points.append((float(coords[0]), float(coords[1])))
+                        if len(points) >= 3:
+                            self.image_viewer.roi_polygons[current_image_name] = points
+                    except (ValueError, IndexError) as e:
+                        print(f"Error parsing ROI for {current_image_name}: {e}")
+
+        # Ensure all loaded images have settings even if not in settings.txt
+        for image_name in self.current_boxes:
+            if image_name not in self.image_confidence_thresholds:
+                self.image_confidence_thresholds[image_name] = 0.1
+            if image_name not in self.green_line_enabled:
+                self.green_line_enabled[image_name] = False
+
     @staticmethod
     def get_resource_path(relative_path):
         if hasattr(sys, '_MEIPASS'):
@@ -2340,6 +2567,7 @@ class ModernVarroaDetectorGUI:
             self.image_confidence_thresholds = {}
             self.boxes_green_lines = {}
             self.image_listbox.fullnames = {}
+            self._stats_cache = {}  # Clear stats cache
 
             # Update statistics to show zero counts
             self.update_box_statistics()
@@ -2366,18 +2594,36 @@ class ModernVarroaDetectorGUI:
             self.current_folder = os.path.join(self.current_folder, "")
             self.output_path = os.path.join(self.current_folder, "processed_images")
 
-            if hasattr(self, 'image_viewer'):
-                self.image_viewer.update_canvas_message("Analysis in progress, please wait")
+            # Check if a 'results' folder already exists
+            existing_results_dir = os.path.join(self.current_folder, "results")
+            load_existing = False
+            if os.path.exists(existing_results_dir) and os.path.isdir(existing_results_dir):
+                load_existing = messagebox.askyesno(
+                    "Existing Results Found",
+                    "A 'results' folder was found in the selected directory.\n\n"
+                    "Do you want to load the existing results?\n\n"
+                    "Click 'Yes' to load existing results (faster, no re-analysis).\n"
+                    "Click 'No' to recalculate from scratch."
+                )
 
-            # Process images
+            if hasattr(self, 'image_viewer'):
+                if load_existing:
+                    self.image_viewer.update_canvas_message("Loading existing results, please wait")
+                else:
+                    self.image_viewer.update_canvas_message("Analysis in progress, please wait")
+
+            # Process images (always needed: copies/converts images for viewing)
             self.process_images()
 
             # Update image list
             self.update_image_list()
 
-            # Run detection
-            self.run_detection()
-
+            if load_existing:
+                # Load labels from existing results instead of running YOLO
+                self.load_existing_results()
+            else:
+                # Run YOLO detection
+                self.run_detection()
 
             # Enable the listbox after processing is complete
             self.image_listbox.configure(state="normal")
@@ -2386,11 +2632,20 @@ class ModernVarroaDetectorGUI:
             self.update_box_statistics()
 
             # Initiate all checkbox green lines to False and threshold to 0.1
+            # (only for fresh analysis; when loading existing, settings come from settings.txt)
             for filename in self.image_listbox.fullnames:
-                self.green_line_enabled[filename] = False
-                self.image_confidence_thresholds[filename] = 0.1
-                # Load all boxes:
-                self.current_boxes[filename] = self.load_boxes_for_image(filename)
+                if not load_existing:
+                    self.green_line_enabled[filename] = False
+                    self.image_confidence_thresholds[filename] = 0.1
+                else:
+                    # Ensure defaults for images not covered by settings.txt
+                    if filename not in self.green_line_enabled:
+                        self.green_line_enabled[filename] = False
+                    if filename not in self.image_confidence_thresholds:
+                        self.image_confidence_thresholds[filename] = 0.1
+                # Load all boxes (only if not already loaded by load_existing_results)
+                if filename not in self.current_boxes:
+                    self.current_boxes[filename] = self.load_boxes_for_image(filename)
 
             # Enable both save and apply-to-all buttons after successful analysis
             self.save_button.configure(state="normal")
@@ -2485,10 +2740,8 @@ class ModernVarroaDetectorGUI:
                 print(f"Error processing image {rel_path}: {str(e)}")
                 print(traceback.format_exc())
                 # Ensure the base image exists even if cropping fails
-                if not os.path.exists(base_output_path) and not input_path.lower().endswith(('.dng','.heic', '.heif')):
+                if not os.path.exists(base_output_path) and not input_path.lower().endswith(('.dng', '.heic', '.heif')):
                     shutil.copyfile(input_path, base_output_path)
-
-
 
     def run_detection(self):
         self.image_listbox.configure(state="disabled")
@@ -2500,7 +2753,8 @@ class ModernVarroaDetectorGUI:
             file_images = []
             for root, _, files in os.walk(self.output_path):
                 for f in files:
-                    if f.lower().endswith('.jpg') and not f.lower().endswith('g-lined.jpg'): # Not analyze the g-lined to avoid duplicate inference.
+                    if f.lower().endswith('.jpg') and not f.lower().endswith(
+                            'g-lined.jpg'):  # Not analyze the g-lined to avoid duplicate inference.
                         # Get full path but store relative path for later use
                         full_path = os.path.join(root, f)
                         rel_path = os.path.relpath(full_path, self.output_path)
@@ -2531,7 +2785,7 @@ class ModernVarroaDetectorGUI:
                     os.makedirs(output_dir, exist_ok=True)
 
                     results = self.model(
-                        img_path, imgsz=(6016), max_det=2000, conf=0.1, iou = 0.5,
+                        img_path, imgsz=(6016), max_det=2000, conf=0.1, iou=0.5,
                         save=True, show_labels=False, line_width=2, save_txt=True, save_conf=True,
                         project=os.path.dirname(output_dir),
                         name=os.path.basename(output_dir) if rel_dir else "predict 0.1",
@@ -2652,7 +2906,6 @@ class ModernVarroaDetectorGUI:
             print(f"Error loading image: {str(e)}")
             messagebox.showerror("Error", f"Error loading image: {str(e)}")
 
-
     def _load_image_into_viewer(self, selected_image_name):
         """
         Loads the correct image version and the corresponding set of bounding boxes
@@ -2704,7 +2957,6 @@ class ModernVarroaDetectorGUI:
         else:
             self.green_lines_checkbox.deselect()
 
-
         # Load the determined image and the CORRECT (potentially filtered) list of boxes
         self.image_viewer.load_image(image_to_load_path, boxes_to_load)
         self.image_viewer.set_confidence_threshold(threshold)
@@ -2743,7 +2995,6 @@ class ModernVarroaDetectorGUI:
             help_window.transient(self.root)
             help_window.grab_set()
         help_window.geometry("810x500")
-
 
         # Create tabview for better organization
         tabview = ctk.CTkTabview(help_window, fg_color=COLORS['surface'])
@@ -2932,12 +3183,13 @@ class ModernVarroaDetectorGUI:
 
         create_header(workflow_frame, "Processing Information")
 
-        workflow_info = ("The analysis will be also performed to any image contained in subfolders of the input folder. "
-                         "The confidence score can be set up individually for each image. Lower confidence score will show more detections, but possibly with more false positives.\n\n"
-                         "The \"Apply Threshold to All Images\" button allows the user to quickly set the same confidence threshold across all the images.\n\n"
-                         "When the \"String Detection\" checkbox is enabled, the program will try to detect green strings to count only mites within the area delimited by the strings. "
-                         "This setting can be applied for each image individually or for all images at once using the \"Apply to All Images\" button.\n\n"
-                         "The Save Button will save the images (with the printed detections) and the coordinates of the detections (the labels) in a folder named \"results\" within the input folder.")
+        workflow_info = (
+            "The analysis will be also performed to any image contained in subfolders of the input folder. "
+            "The confidence score can be set up individually for each image. Lower confidence score will show more detections, but possibly with more false positives.\n\n"
+            "The \"Apply Threshold to All Images\" button allows the user to quickly set the same confidence threshold across all the images.\n\n"
+            "When the \"String Detection\" checkbox is enabled, the program will try to detect green strings to count only mites within the area delimited by the strings. "
+            "This setting can be applied for each image individually or for all images at once using the \"Apply to All Images\" button.\n\n"
+            "The Save Button will save the images (with the printed detections) and the coordinates of the detections (the labels) in a folder named \"results\" within the input folder.")
         create_content(workflow_frame, workflow_info)
 
         # ABOUT TAB
@@ -3097,7 +3349,7 @@ class ModernVarroaDetectorGUI:
 
         version_label = ctk.CTkLabel(
             version_frame,
-            text="Version 0.0.2",
+            text="Version 0.0.3",
             font=("Inter", 12),
             text_color=COLORS['secondary']
         )
