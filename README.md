@@ -22,7 +22,7 @@ The well-known beekeeper <b>[The Apiarist](https://theapiarist.org/)</b> has wri
 ## ⚡ Execution Options
 
 #### Option 1: Executable File (Recommended)
-1. Download the VarroDetector executable file for [Windows](https://github.com/jodivaso/varrodetector/releases/download/v0.0.2/VarroDetector.exe) or for [Linux](https://unirioja-my.sharepoint.com/:u:/g/personal/jodivaso_unirioja_es/EVza3D-1f75Iho4fNZDXE0oBI0Y7Zp4Nh5FfCnsU5pR5jQ?e=VkFVKT) (MacOS coming soon).
+1. Download the VarroDetector executable file for [Windows](https://github.com/jodivaso/varrodetector/releases/download/v0.0.3/VarroDetector.exe) or for [Linux](https://unirioja-my.sharepoint.com/:u:/g/personal/jodivaso_unirioja_es/EVza3D-1f75Iho4fNZDXE0oBI0Y7Zp4Nh5FfCnsU5pR5jQ?e=VkFVKT) (MacOS coming soon).
 2. Run the executable file
 
 *Note:* This file is self-contained, so the application takes a few seconds to start since the contents must be unzipped on the fly.
